@@ -45,7 +45,7 @@
 #include "fsl_enet.h"
 #include "fsl_port.h"
 
-#include "device\phylan8741\fsl_phylan8741.h"
+#include "device/phylan8741/fsl_phylan8741.h"
 
 /*=======================================================================*/
 /*  Extern                                                               */
