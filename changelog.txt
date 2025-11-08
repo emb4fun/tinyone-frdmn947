@@ -2,12 +2,18 @@
 * Project: tinyone-frdmn947
 * Name   : "A small embedded DHCP and SNTP server"
 * Target : NXP FRDM-MCXN947
-* Version: 20250720
+* Version: 20251108
 ***************************************************************************
 * Tools  : SEGGER Embedded Studio for ARM v7.32a
 ***************************************************************************
 * URL    : https://www.emb4fun.de/projects/tone/index.html
 ***************************************************************************
+
+= Version 1.29 / 1.21, 11.08.2025
+   * Updated lwIP to version from 2025-08-03
+     "lwip-56b29f8bcfaefe2974dca67bde16cc7c391feaeb"
+   * Updated MbedTLS to v3.6.5.
+   * Updated xtools to Version v2.00.
 
 = Version 1.28 / 1.21, 20.07.2025
    * The "low_level_input" function has been updated to now correctly

@@ -344,6 +344,7 @@ static int FlashUpdate (char *pFilename)
 static void ImageCopy (void)
 {
    FRESULT       res;
+   FILINFO       fno; 
    uint32_t     dByteCnt;
    uint8_t      bIndex = 0;
    char        *pFWName = NULL;
@@ -366,6 +367,14 @@ static void ImageCopy (void)
    }
    else
    {
+      /* Check if folder exist */
+      res = f_stat("etc", &fno);
+      if (res != FR_OK)
+      {
+        /* Create /etc/ first */
+        f_mkdir("/etc");
+      }
+      
       /* Create a "fw.bin" file with index 1 */
       res = f_open(&hFile, "/etc/fw.bin", FA_CREATE_ALWAYS | FA_WRITE);
       if (FR_OK == res)
