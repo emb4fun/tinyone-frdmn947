@@ -1,7 +1,7 @@
 /**************************************************************************
 *  This file is part of the TAL project (Tiny Abstraction Layer)
 *
-*  Copyright (c) 2013-2023 by Michael Fischer (www.emb4fun.de).
+*  Copyright (c) 2013-2026 by Michael Fischer (www.emb4fun.de).
 *  All rights reserved.
 *
 *  Redistribution and use in source and binary forms, with or without
@@ -485,6 +485,8 @@ TAL_RESULT tal_COMClearOverflow (TAL_COM_DCB *pDCB)
          /* Clear counting semaphore */
          OS_SemaDelete(&pDCB->RxRdySema);
          OS_SemaCreate(&pDCB->RxRdySema, 0, OS_SEMA_COUNTER_MAX);
+         
+         pDCB->bRxOverflow = TAL_FALSE;
 
          OS_RES_FREE(&pDCB->Sema);
 
@@ -632,19 +634,6 @@ TAL_RESULT tal_COMSendBlock (TAL_COM_DCB *pDCB, uint8_t *pData, uint16_t wSize)
       {
          OS_RES_LOCK(&pDCB->TxSema);
 
-#if defined(__NEORV32_FAMILY)
-         /*
-          * Use polling instead of interrupt control
-          */
-         neorv32_uart_t *UARTx;
-         UARTx = (neorv32_uart_t*)pDCB->HW.dBaseAddress;
-         while (wSize)
-         {
-            neorv32_uart_putc(UARTx, *pData);
-            pData++;
-            wSize--;
-         }
-#else
 #if 0
          do
          {
@@ -746,7 +735,6 @@ TAL_RESULT tal_COMSendBlock (TAL_COM_DCB *pDCB, uint8_t *pData, uint16_t wSize)
             while (wSize != 0);
          } /* end if (wFreeCount >= wSize) */
 #endif
-#endif /* #if defined(__NEORV32_FAMILY) */
 
          OS_RES_FREE(&pDCB->TxSema);
 

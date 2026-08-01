@@ -70,5 +70,20 @@ err_t ethernetif_init (struct netif *netif);
  */
 void ETHERNET_DriverIRQHandler (void);
 
+
+/*
+ * IEEE 1588 support
+ */
+#if defined(LWIP_PTP) && (LWIP_PTP >= 1)
+
+void ethernet_ptp_init (void);
+void ethernet_ptp_set_timer (struct netif *netif, uint64_t seconds, uint32_t nanoseconds);
+void ethernet_ptp_set_timer_offset (struct netif *netif, int64_t offset);
+void ethernet_ptp_get_timer (struct netif *netif, uint64_t *seconds, uint32_t *nanoseconds);
+void ethernet_ptp_adjust_timer (struct netif *netif, float tuning_ppb);
+
+#endif /* defined(LWIP_PTP) && (LWIP_PTP >= 1) */ 
+
 #endif /* __ETHERNETIF_H__ */
+
 /*** EOF ***/

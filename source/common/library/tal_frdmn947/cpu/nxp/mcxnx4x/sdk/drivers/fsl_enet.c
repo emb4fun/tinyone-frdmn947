@@ -1292,6 +1292,8 @@ status_t ENET_SetTxInnerVlan(ENET_Type *base, enet_vlan_tx_config_t *config)
  */
 status_t ENET_GetRxFrameSize(ENET_Type *base, enet_handle_t *handle, uint32_t *length, uint8_t channel)
 {
+    (void)base;
+
     assert(handle);
     assert(length);
 
@@ -1369,6 +1371,8 @@ status_t ENET_GetRxFrameSize(ENET_Type *base, enet_handle_t *handle, uint32_t *l
 status_t ENET_ReadFrame(
     ENET_Type *base, enet_handle_t *handle, uint8_t *data, uint32_t length, uint8_t channel, enet_ptp_time_t *timestamp)
 {
+    (void)timestamp;
+
     assert(handle);
 
     enet_rx_bd_ring_t *rxBdRing = (enet_rx_bd_ring_t *)&handle->rxBdRing[channel];

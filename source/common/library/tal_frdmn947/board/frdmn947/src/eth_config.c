@@ -368,6 +368,12 @@ void BoardETHConfig (void)
       InitPins();   
    
       CLOCK_AttachClk(MUX_A(CM_ENETRMIICLKSEL, 0));
+      
+      /* Enable 1588 timer */
+      CLOCK_AttachClk(kNONE_to_ENETRMII);
+      SYSCON0->ENETPTPREFCLKSEL = 4;
+      SYSCON0->ENETPTPREFCLKDIV = 0;
+      
       CLOCK_EnableClock(kCLOCK_Enet);
       SYSCON0->PRESETCTRL2  =  SYSCON_PRESETCTRL2_ENET_RST_MASK;
       SYSCON0->PRESETCTRL2 &= ~SYSCON_PRESETCTRL2_ENET_RST_MASK;

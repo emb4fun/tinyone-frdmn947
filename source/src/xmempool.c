@@ -46,7 +46,7 @@
 #define FS_MEMORY_SIZE     (   6 * 1024)
 #define LWIP_MEMORY_SIZE   (  52 * 1024)
 #define WEB_MEMORY_SIZE    (  32 * 1024)
-#define TLS_MEMORY_SIZE    ( 192 * 1024)
+#define TLS_MEMORY_SIZE    ( 184 * 1024)
 
 /*=======================================================================*/
 /*  Definition of all global Data                                        */

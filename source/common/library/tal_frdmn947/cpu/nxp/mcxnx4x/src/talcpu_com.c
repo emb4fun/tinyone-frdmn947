@@ -57,6 +57,11 @@
 #define USART8_IRQHandler   LP_FLEXCOMM8_IRQHandler
 #define USART9_IRQHandler   LP_FLEXCOMM9_IRQHandler
 
+#define ERROR_FLAGS        ( kLPUART_RxOverrunFlag    | \
+                             kLPUART_NoiseErrorFlag   | \
+                             kLPUART_FramingErrorFlag | \
+                             kLPUART_ParityErrorFlag  )
+
 /*=======================================================================*/
 /*  Definition of all local Data                                         */
 /*=======================================================================*/
@@ -130,12 +135,16 @@ static void IRQHandler (TAL_COM_DCB *pDCB)
    LPUART_Type       *pUARTx = (LPUART_Type*)pHW->dBaseAddress;
    uint8_t           *pData;
    uint8_t            bData;
+   uint32_t           dStatus;
    TAL_COM_OBJECT_TIME TimeData;
+
+   /* Get status */
+   dStatus = LPUART_GetStatusFlags(pUARTx);
 
    /*
     * RX Interrupt
     */
-   if (kLPUART_RxDataRegFullFlag & LPUART_GetStatusFlags(pUARTx))
+   if (kLPUART_RxDataRegFullFlag & dStatus)
    {
       bData = (uint8_t)pUARTx->DATA;
       
@@ -188,7 +197,7 @@ static void IRQHandler (TAL_COM_DCB *pDCB)
     * Check for TX interrupt, but only if enabled 
     */
    if ((LPUART_GetEnabledInterrupts(pUARTx) & kLPUART_TxDataRegEmptyInterruptEnable) &&  /* <= enabled ? */
-       (kLPUART_TxDataRegEmptyFlag & LPUART_GetStatusFlags(pUARTx)))                     /* <= TX interrupt ? */
+       (kLPUART_TxDataRegEmptyFlag & dStatus))                                           /* <= TX interrupt ? */
    {
       /* Read Data from the ring buffer */
       Error = tal_MISCRingGet(&pDCB->TxRing, &bData);
@@ -206,6 +215,16 @@ static void IRQHandler (TAL_COM_DCB *pDCB)
          pUARTx->DATA = bData;
       }   
    } /* end "TX interrupt */
+   
+   
+   /*
+    * Check for error
+    */
+   if (ERROR_FLAGS & dStatus)
+   {
+      /* Ops */
+      LPUART_ClearStatusFlags(pUARTx, ERROR_FLAGS);
+   }    
    
 } /* IRQHandler */
 

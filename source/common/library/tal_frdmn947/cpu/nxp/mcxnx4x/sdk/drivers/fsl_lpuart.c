@@ -337,7 +337,8 @@ status_t LPUART_Init(LPUART_Type *base, const lpuart_config_t *config, uint32_t 
     {
 #if !(defined(LPFLEXCOMM_INIT_NOT_USED_IN_DRIVER) && LPFLEXCOMM_INIT_NOT_USED_IN_DRIVER)
         /* initialize flexcomm to LPUART mode */
-        status = LP_FLEXCOMM_Init(LPUART_GetInstance(base), LP_FLEXCOMM_PERIPH_LPUART);
+        //status = LP_FLEXCOMM_Init(LPUART_GetInstance(base), LP_FLEXCOMM_PERIPH_LPUART);
+        status = LP_FLEXCOMM_Init(LPUART_GetInstance(base), config->periph);
         if (kStatus_Success != status)
         {
             return status;
@@ -598,6 +599,7 @@ void LPUART_GetDefaultConfig(lpuart_config_t *config)
     config->rxIdleConfig = kLPUART_IdleCharacter1;
     config->enableTx     = false;
     config->enableRx     = false;
+    config->periph       = LP_FLEXCOMM_PERIPH_LPUART;
 }
 
 /*!

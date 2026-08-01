@@ -158,7 +158,7 @@
           </folder>
           <folder Name="lwip_port">
             <folder Name="dev">
-              <file file_name="../common/library/lwip_port/dev/ethernetif_lpc.c" />
+              <file file_name="../common/library/lwip_port/dev/ethernetif.c" />
             </folder>
             <folder Name="os">
               <file file_name="../common/library/lwip_port/os/sys_arch_tcts.c" />
@@ -206,6 +206,7 @@
             <file file_name="../common/library/mbedtls/library/psa_crypto_ecp.c" />
             <file file_name="../common/library/mbedtls/library/psa_crypto_hash.c" />
             <file file_name="../common/library/mbedtls/library/psa_crypto_mac.c" />
+            <file file_name="../common/library/mbedtls/library/psa_crypto_random.c" />
             <file file_name="../common/library/mbedtls/library/psa_crypto_slot_management.c" />
             <file file_name="../common/library/mbedtls/library/psa_util.c" />
             <file file_name="../common/library/mbedtls/library/sha1.c" />
