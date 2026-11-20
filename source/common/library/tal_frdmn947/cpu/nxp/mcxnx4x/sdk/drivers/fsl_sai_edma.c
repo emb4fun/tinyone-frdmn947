@@ -81,7 +81,7 @@ static uint32_t SAI_GetInstance(I2S_Type *base)
     /* Find the instance index from base address mappings. */
     for (instance = 0; instance < ARRAY_SIZE(s_saiBases); instance++)
     {
-        if (MSDK_REG_SECURE_ADDR(s_saiBases[instance]) == MSDK_REG_SECURE_ADDR(base))
+        if (MSDK_REG_NONSECURE_ADDR(s_saiBases[instance]) == MSDK_REG_NONSECURE_ADDR(base))
         {
             break;
         }
@@ -318,6 +318,7 @@ void SAI_TransferTxSetConfigEDMA(I2S_Type *base, sai_edma_handle_t *handle, sai_
     /* Clear the channel enable bits until do a send/receive */
     base->TCR3 &= ~I2S_TCR3_TCE_MASK;
 #if defined(FSL_FEATURE_SAI_HAS_FIFO) && (FSL_FEATURE_SAI_HAS_FIFO)
+    assert(FSL_FEATURE_SAI_FIFO_COUNTn(base) != -1);
     uint32_t tempCount = (uint32_t)FSL_FEATURE_SAI_FIFO_COUNTn(base) - saiConfig->fifo.fifoWatermark;
     if (tempCount > UINT8_MAX)
     {
@@ -487,7 +488,7 @@ status_t SAI_TransferSendEDMA(I2S_Type *base, sai_edma_handle_t *handle, sai_tra
         EDMA_PrepareTransferConfig(&config, xfer->data, (uint32_t)handle->bytesPerFrame, (int16_t)srcOffset,
                                    (uint32_t *)destAddr, (uint32_t)handle->bytesPerFrame, (int16_t)destOffset,
                                    (uint32_t)2U * handle->bytesPerFrame, xfer->dataSize);
-#if defined FSL_EDMA_DRIVER_EDMA4 && FSL_EDMA_DRIVER_EDMA4
+#if defined FSL_EDMA_DRIVER_UNIFIED && FSL_EDMA_DRIVER_UNIFIED
         EDMA_TcdSetTransferConfigExt(handle->dmaHandle->base, currentTCD, &config, NULL);
         EDMA_TcdSetMinorOffsetConfigExt(handle->dmaHandle->base, currentTCD, &minorOffset);
         EDMA_TcdEnableInterruptsExt(handle->dmaHandle->base, currentTCD, (uint32_t)kEDMA_MajorInterruptEnable);
@@ -641,7 +642,7 @@ status_t SAI_TransferReceiveEDMA(I2S_Type *base, sai_edma_handle_t *handle, sai_
         EDMA_PrepareTransferConfig(&config, (uint32_t *)srcAddr, (uint32_t)handle->bytesPerFrame, (int16_t)srcOffset,
                                    xfer->data, (uint32_t)handle->bytesPerFrame, (int16_t)destOffset,
                                    (uint32_t)2U * handle->bytesPerFrame, xfer->dataSize);
-#if defined FSL_EDMA_DRIVER_EDMA4 && FSL_EDMA_DRIVER_EDMA4
+#if defined FSL_EDMA_DRIVER_UNIFIED && FSL_EDMA_DRIVER_UNIFIED
         EDMA_TcdSetTransferConfigExt(handle->dmaHandle->base, currentTCD, &config, NULL);
         EDMA_TcdSetMinorOffsetConfigExt(handle->dmaHandle->base, currentTCD, &minorOffset);
         EDMA_TcdEnableInterruptsExt(handle->dmaHandle->base, currentTCD, (uint32_t)kEDMA_MajorInterruptEnable);
@@ -751,7 +752,7 @@ status_t SAI_TransferSendLoopEDMA(I2S_Type *base,
                              handle->bytesPerFrame, (uint32_t)handle->count * handle->bytesPerFrame, transfer->dataSize,
                              kEDMA_MemoryToPeripheral);
 
-#if defined FSL_EDMA_DRIVER_EDMA4 && FSL_EDMA_DRIVER_EDMA4
+#if defined FSL_EDMA_DRIVER_UNIFIED && FSL_EDMA_DRIVER_UNIFIED
         if (i == (loopTransferCount - 1U))
         {
             EDMA_TcdSetTransferConfigExt(handle->dmaHandle->base, &currentTCD[tcdIndex], &config, &currentTCD[0U]);
@@ -853,7 +854,7 @@ status_t SAI_TransferReceiveLoopEDMA(I2S_Type *base,
                              (uint32_t)handle->count * handle->bytesPerFrame, transfer->dataSize,
                              kEDMA_PeripheralToMemory);
 
-#if defined FSL_EDMA_DRIVER_EDMA4 && FSL_EDMA_DRIVER_EDMA4
+#if defined FSL_EDMA_DRIVER_UNIFIED && FSL_EDMA_DRIVER_UNIFIED
         if (i == (loopTransferCount - 1U))
         {
             EDMA_TcdSetTransferConfigExt(handle->dmaHandle->base, &currentTCD[tcdIndex], &config, &currentTCD[0U]);

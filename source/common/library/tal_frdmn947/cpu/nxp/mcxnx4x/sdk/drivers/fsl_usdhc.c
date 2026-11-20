@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016, Freescale Semiconductor, Inc.
- * Copyright 2016-2021, 2025 NXP
+ * Copyright 2016-2021, 2025-2026 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -417,6 +417,8 @@ static uint32_t USDHC_ReadDataPort(USDHC_Type *base, usdhc_data_t *data, uint32_
 
         totalWords = ((data->blockCount * data->blockSize) / sizeof(uint32_t));
 
+        assert(totalWords >= transferredWords);
+
         /* If watermark level is equal or bigger than totalWords, transfers totalWords data. */
         if (readWatermark >= totalWords)
         {
@@ -435,6 +437,8 @@ static uint32_t USDHC_ReadDataPort(USDHC_Type *base, usdhc_data_t *data, uint32_
         {
             wordsCanBeRead = (totalWords - transferredWords);
         }
+
+        assert(transferredWords < UINT32_MAX - wordsCanBeRead);
 
         i = 0U;
         while (i < wordsCanBeRead)
@@ -543,6 +547,8 @@ static uint32_t USDHC_WriteDataPort(USDHC_Type *base, usdhc_data_t *data, uint32
 
         totalWords = ((data->blockCount * data->blockSize) / sizeof(uint32_t));
 
+        assert(totalWords >= transferredWords);
+
         /* If watermark level is equal or bigger than totalWords, transfers totalWords data.*/
         if (writeWatermark >= totalWords)
         {
@@ -560,6 +566,9 @@ static uint32_t USDHC_WriteDataPort(USDHC_Type *base, usdhc_data_t *data, uint32
         {
             wordsCanBeWrote = (totalWords - transferredWords);
         }
+
+        assert(data->txData != NULL);
+        assert(transferredWords < UINT32_MAX - wordsCanBeWrote);
 
         i = 0U;
         while (i < wordsCanBeWrote)
@@ -783,6 +792,15 @@ static status_t USDHC_TransferDataBlocking(USDHC_Type *base, usdhc_data_t *data,
             *(data->rxData) = s_usdhcBootDummy;
         }
 
+#if defined(FSL_SDK_ENABLE_DRIVER_CACHE_CONTROL) && FSL_SDK_ENABLE_DRIVER_CACHE_CONTROL
+        if (IS_USDHC_FLAG_SET(interruptStatus, kUSDHC_DataCompleteFlag))
+        {
+            if (data->rxData != NULL)
+            {
+                DCACHE_InvalidateByRange((uintptr_t)(data->rxData), (data->blockSize) * (data->blockCount));
+            }
+        }
+#endif
         USDHC_ClearInterruptStatusFlags(base, ((uint32_t)kUSDHC_DataDMAFlag | (uint32_t)kUSDHC_TuningErrorFlag));
     }
     else
@@ -837,15 +855,19 @@ void USDHC_Init(USDHC_Type *base, const usdhc_config_t *config)
     assert(config->writeBurstLen <= 16U);
 #endif
     uint32_t proctl, sysctl, wml;
+#if (!(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL)) || \
+    ((defined(FSL_FEATURE_USDHC_HAS_RESET) && FSL_FEATURE_USDHC_HAS_RESET))
+    uint32_t instance = USDHC_GetInstance(base);
+#endif
 
 #if !(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL)
     /* Enable USDHC clock. */
-    CLOCK_EnableClock(s_usdhcClock[USDHC_GetInstance(base)]);
+    CLOCK_EnableClock(s_usdhcClock[instance]);
 #endif
 
 #if (defined(FSL_FEATURE_USDHC_HAS_RESET) && FSL_FEATURE_USDHC_HAS_RESET)
     /* Reset the USDHC module */
-    RESET_PeripheralReset(s_usdhcResets[USDHC_GetInstance(base)]);
+    RESET_PeripheralReset(s_usdhcResets[instance]);
 #endif
 
     /* Reset ALL USDHC. */
@@ -899,8 +921,10 @@ void USDHC_Init(USDHC_Type *base, const usdhc_config_t *config)
 void USDHC_Deinit(USDHC_Type *base)
 {
 #if !(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL)
+    uint32_t instance = USDHC_GetInstance(base);
+
     /* Disable clock. */
-    CLOCK_DisableClock(s_usdhcClock[USDHC_GetInstance(base)]);
+    CLOCK_DisableClock(s_usdhcClock[instance]);
 #endif
 }
 
@@ -1219,6 +1243,7 @@ status_t USDHC_SetADMA1Descriptor(
 {
     assert(NULL != admaTable);
     assert(NULL != dataBufferAddr);
+    assert(admaTableWords <= UINT32_MAX / sizeof(uint32_t));
 
     uint32_t miniEntries, startEntries = 0UL,
                           maxEntries = (admaTableWords * sizeof(uint32_t)) / sizeof(usdhc_adma1_descriptor_t);
@@ -1283,6 +1308,7 @@ status_t USDHC_SetADMA1Descriptor(
         data = (uint32_t *)((uintptr_t)data + dmaBufferLen);
         dataBytes -= dmaBufferLen;
     }
+    assert(i > 1UL);
     /* the end of the descriptor */
     adma1EntryAddress[i - 1UL] |= (uint32_t)kUSDHC_Adma1DescriptorEndFlag;
 
@@ -1306,6 +1332,7 @@ status_t USDHC_SetADMA2Descriptor(
 {
     assert(NULL != admaTable);
     assert(NULL != dataBufferAddr);
+    assert(admaTableWords <= UINT32_MAX / sizeof(uint32_t));
 
     uint32_t miniEntries, startEntries = 0UL,
                           maxEntries = (admaTableWords * sizeof(uint32_t)) / sizeof(usdhc_adma2_descriptor_t);
@@ -1349,9 +1376,13 @@ status_t USDHC_SetADMA2Descriptor(
             }
         }
         startEntries = i;
+
+        assert(miniEntries <= UINT32_MAX - 1UL);
         /* add one entry for dummy entry */
         miniEntries += 1UL;
     }
+
+    assert(miniEntries <= UINT32_MAX - startEntries);
 
     if ((miniEntries + startEntries) > maxEntries)
     {
@@ -1398,6 +1429,7 @@ status_t USDHC_SetADMA2Descriptor(
     }
     else
     {
+        assert(i >= 1UL);
         /* set the end bit */
         adma2EntryAddress[i - 1UL].attribute |= (uint32_t)kUSDHC_Adma2DescriptorEndFlag;
     }
@@ -1497,7 +1529,12 @@ status_t USDHC_SetAdmaTableConfig(USDHC_Type *base,
         dataConfig->dataType == (uint32_t)kUSDHC_TransferDataBootcontinous ? sizeof(uint32_t) : 0UL;
     const uint32_t *data = (const uint32_t *)USDHC_ADDR_CPU_2_DMA((uintptr_t)(
         (uintptr_t)((dataConfig->rxData == NULL) ? dataConfig->txData : dataConfig->rxData) + bootDummyOffset));
-    uint32_t blockSize   = dataConfig->blockSize * dataConfig->blockCount - bootDummyOffset;
+    uint32_t blockSize;
+
+    assert(dataConfig->blockSize <= UINT32_MAX / dataConfig->blockCount);
+    assert(dataConfig->blockSize * dataConfig->blockCount >= bootDummyOffset);
+
+    blockSize = dataConfig->blockSize * dataConfig->blockCount - bootDummyOffset;
 
 #if FSL_FEATURE_USDHC_HAS_EXT_DMA
     if (dmaConfig->dmaMode == kUSDHC_ExternalDMA)
@@ -1698,6 +1735,8 @@ static status_t USDHC_SetScatterGatherAdmaTableConfig(USDHC_Type *base,
         }
 #endif
 
+        assert(*totalTransferSize <= UINT32_MAX - sgDataList->dataSize);
+
         *totalTransferSize += sgDataList->dataSize;
         if (sgDataList->dataList != NULL)
         {
@@ -1711,13 +1750,14 @@ static status_t USDHC_SetScatterGatherAdmaTableConfig(USDHC_Type *base,
             }
             if (dmaConfig->dmaMode == kUSDHC_DmaModeAdma1)
             {
-                admaDesBuffer[miniEntries * 2U - 1U] &= ~kUSDHC_Adma1DescriptorEndFlag;
+                admaDesBuffer[miniEntries * 2U - 1U] &= ~(uint32_t)kUSDHC_Adma1DescriptorEndFlag;
             }
             else
             {
-                admaDesBuffer[miniEntries * 2U - 2U] &= ~kUSDHC_Adma2DescriptorEndFlag;
+                admaDesBuffer[miniEntries * 2U - 2U] &= ~(uint32_t)kUSDHC_Adma2DescriptorEndFlag;
             }
             admaDesBuffer += miniEntries * 2U;
+            assert(admaDesLen >= miniEntries * 2U);
             admaDesLen -= miniEntries * 2U;
         }
 
@@ -1835,6 +1875,8 @@ status_t USDHC_TransferScatterGatherADMANonBlocking(USDHC_Type *base,
         USDHC_ClearInterruptStatusFlags(base, kUSDHC_CommandFlag);
         USDHC_EnableInterruptSignal(base, kUSDHC_CommandFlag);
     }
+
+    handle->enDMA = enDMA;
 
     /* send command first */
     USDHC_SendCommand(base, command);
@@ -1967,6 +2009,8 @@ status_t USDHC_TransferNonBlocking(USDHC_Type *base,
         USDHC_EnableInterruptSignal(base, kUSDHC_CommandFlag);
     }
 
+    handle->enDMA = enDMA;
+
     /* send command first */
     USDHC_SendCommand(base, command);
 
@@ -2096,6 +2140,9 @@ void USDHC_EnableStandardTuning(USDHC_Type *base, uint32_t tuningStartTap, uint3
         tuningCtrl &= ~(USDHC_TUNING_CTRL_TUNING_START_TAP_MASK | USDHC_TUNING_CTRL_TUNING_STEP_MASK);
         tuningCtrl |= (USDHC_TUNING_CTRL_TUNING_START_TAP(tuningStartTap) | USDHC_TUNING_CTRL_TUNING_STEP(step) |
                        USDHC_TUNING_CTRL_STD_TUNING_EN_MASK);
+#if defined(USDHC_TUNING_CTRL_DIS_CMD_CHK_FOR_STD_TUNING_MASK)
+        tuningCtrl |= USDHC_TUNING_CTRL_DIS_CMD_CHK_FOR_STD_TUNING(1);
+#endif
         base->TUNING_CTRL = tuningCtrl;
 
         /* excute tuning */
@@ -2280,7 +2327,7 @@ static void USDHC_TransferHandleData(USDHC_Type *base, usdhc_handle_t *handle, u
                 transferStatus = kStatus_USDHC_TransferDataComplete;
 
 #if defined(FSL_SDK_ENABLE_DRIVER_CACHE_CONTROL) && FSL_SDK_ENABLE_DRIVER_CACHE_CONTROL
-                if (handle->data->dataDirection == kUSDHC_TransferDirectionReceive)
+                if (handle->enDMA && handle->data->dataDirection == kUSDHC_TransferDirectionReceive)
                 {
                     usdhc_scatter_gather_data_list_t *sgDataList = &handle->data->sgData;
                     while (sgDataList != NULL)
@@ -2347,7 +2394,7 @@ static void USDHC_TransferHandleData(USDHC_Type *base, usdhc_handle_t *handle, u
                 transferStatus = kStatus_USDHC_TransferDataComplete;
 
 #if defined(FSL_SDK_ENABLE_DRIVER_CACHE_CONTROL) && FSL_SDK_ENABLE_DRIVER_CACHE_CONTROL
-                if (handle->data->rxData != NULL)
+                if (handle->enDMA && handle->data->rxData != NULL)
                 {
                     DCACHE_InvalidateByRange((uintptr_t)(handle->data->rxData),
                                              (handle->data->blockSize) * (handle->data->blockCount));
@@ -2409,6 +2456,7 @@ void USDHC_TransferCreateHandle(USDHC_Type *base,
 {
     assert(handle != NULL);
     assert(callback != NULL);
+    uint32_t instance = USDHC_GetInstance(base);
 
     /* Zero the handle. */
     (void)memset(handle, 0, sizeof(*handle));
@@ -2423,12 +2471,12 @@ void USDHC_TransferCreateHandle(USDHC_Type *base,
     handle->userData                  = userData;
 
     /* Save the handle in global variables to support the double weak mechanism. */
-    s_usdhcHandle[USDHC_GetInstance(base)] = handle;
+    s_usdhcHandle[instance] = handle;
 
     /* save IRQ handler */
     s_usdhcIsr = USDHC_TransferHandleIRQ;
 
-    (void)EnableIRQ(s_usdhcIRQ[USDHC_GetInstance(base)]);
+    (void)EnableIRQ(s_usdhcIRQ[instance]);
 }
 
 /*!
@@ -2474,6 +2522,15 @@ void USDHC_TransferHandleIRQ(USDHC_Type *base, usdhc_handle_t *handle)
     }
 #endif
     USDHC_ClearInterruptStatusFlags(base, interruptFlags);
+}
+
+void USDHC_DriverIRQHandler(uint32_t instance)
+{
+    if (instance < ARRAY_SIZE(s_usdhcBase))
+    {
+        s_usdhcIsr(s_usdhcBase[instance], s_usdhcHandle[instance]);
+    }
+    SDK_ISR_EXIT_BARRIER;
 }
 
 #ifdef USDHC0

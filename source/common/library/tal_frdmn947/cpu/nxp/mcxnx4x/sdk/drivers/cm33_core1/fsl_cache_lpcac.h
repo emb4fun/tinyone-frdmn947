@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2023, 2025 NXP
+ * Copyright 2021-2023, 2025-2026 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -21,7 +21,7 @@
 /*! @name Driver version */
 /*@{*/
 /*! @brief cache driver version */
-#define FSL_CACHE_LPCAC_DRIVER_VERSION (MAKE_VERSION(2, 2, 0))
+#define FSL_CACHE_LPCAC_DRIVER_VERSION (MAKE_VERSION(2, 2, 2))
 /*@}*/
 /*******************************************************************************
  * API
@@ -42,7 +42,13 @@ extern "C" {
  */
 static inline void L1CACHE_EnableCodeCache(void)
 {
+    __DSB();
+    __ISB();
+
     SYSCON->LPCAC_CTRL &= ~SYSCON_LPCAC_CTRL_DIS_LPCAC_MASK;
+
+    __DSB();
+    __ISB();
 }
 
 /*!
@@ -51,16 +57,31 @@ static inline void L1CACHE_EnableCodeCache(void)
  */
 static inline void L1CACHE_DisableCodeCache(void)
 {
+    __DSB();
+    __ISB();
+
     SYSCON->LPCAC_CTRL |= SYSCON_LPCAC_CTRL_DIS_LPCAC_MASK;
+
+    __DSB();
+    __ISB();
 }
 
 /*!
  * @brief  Clears cache.
  *
+ * @note LPCAC_CTRL[CLR_LPCAC] is a sticky bit: writing 1 clears (invalidates) the
+ * cache, and the cache is held cleared until the bit is written back to 0. This
+ * function therefore sets the bit and then clears it, with a memory barrier in
+ * between, so the cache is invalidated and left in a valid (operational) state.
  */
 static inline void L1CACHE_InvalidateCodeCache(void)
 {
     SYSCON->LPCAC_CTRL |= SYSCON_LPCAC_CTRL_CLR_LPCAC_MASK;
+
+    __DSB();
+    __ISB();
+
+    SYSCON->LPCAC_CTRL &= ~SYSCON_LPCAC_CTRL_CLR_LPCAC_MASK;
 }
 
 /*!

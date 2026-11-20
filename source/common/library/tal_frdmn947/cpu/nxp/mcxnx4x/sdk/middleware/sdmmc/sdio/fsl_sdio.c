@@ -266,6 +266,23 @@ static status_t SDIO_SendRca(sdio_card_t *card)
     return kStatus_SDMMC_TransferFailed;
 }
 
+static status_t SDIO_SendCrcEnable(sdio_card_t *card, bool enable)
+{
+    assert(card != NULL);
+
+    sdmmchost_transfer_t content = {0};
+    sdmmchost_cmd_t command      = {0};
+
+    command.index        = (uint32_t)kSDIO_SpiCrcOnOff;
+    command.argument     = (enable ? 1U : 0U);
+    command.responseType = kCARD_ResponseTypeR1;
+
+    content.command = &command;
+    content.data    = NULL;
+
+    return SDMMCHOST_TransferFunction(card->host, &content);
+}
+
 status_t SDIO_CardInActive(sdio_card_t *card)
 {
     assert(card != NULL);
@@ -357,7 +374,7 @@ static status_t SDIO_IO_Access_Direct(sdio_card_t *card,
 
     if ((dataOut != NULL) && (direction == kSDIO_IOWrite))
     {
-        command.argument |= (1UL << SDIO_CMD_ARGUMENT_RW_POS) | ((uint32_t)rawFlag << SDIO_DIRECT_CMD_ARGUMENT_RAW_POS);
+        command.argument |= (1UL << SDIO_CMD_ARGUMENT_RW_POS) | ((rawFlag ? 1U : 0U) << SDIO_DIRECT_CMD_ARGUMENT_RAW_POS);
     }
 
     if (direction == kSDIO_IOWrite)
@@ -1533,8 +1550,8 @@ static status_t SDIO_DecodeCIS(
         /* only decode MANIFID,FUNCID,FUNCE here  */
         if (tplCode == SDIO_TPL_CODE_MANIFID)
         {
-            card->commonCIS.mID   = dataBuffer[0U] | ((uint16_t)dataBuffer[1U] << 8U);
-            card->commonCIS.mInfo = dataBuffer[2U] | ((uint16_t)dataBuffer[3U] << 8U);
+            card->commonCIS.mID   = ((uint32_t)dataBuffer[0U] | ((uint32_t)dataBuffer[1U] << 8U)) & 0xFFFFU;
+            card->commonCIS.mInfo = ((uint32_t)dataBuffer[2U] | ((uint32_t)dataBuffer[3U] << 8U)) & 0xFFFFU;
         }
         else if (tplCode == SDIO_TPL_CODE_FUNCID)
         {
@@ -1543,7 +1560,7 @@ static status_t SDIO_DecodeCIS(
         else if (tplCode == SDIO_TPL_CODE_FUNCE)
         {
             /* max transfer block size and data size */
-            card->commonCIS.fn0MaxBlkSize = dataBuffer[1U] | ((uint16_t)dataBuffer[2U] << 8U);
+            card->commonCIS.fn0MaxBlkSize = ((uint32_t)dataBuffer[1U] | ((uint32_t)dataBuffer[2U] << 8U)) & 0xFFFFU;
             /* max transfer speed */
             card->commonCIS.maxTransSpeed = dataBuffer[3U];
         }
@@ -1573,7 +1590,8 @@ static status_t SDIO_DecodeCIS(
                                                                ((uint32_t)dataBuffer[9U] << 16U) |
                                                                ((uint32_t)dataBuffer[10U] << 24U);
                 card->funcCIS[(uint32_t)func - 1U].ioCSAProperty  = dataBuffer[11U];
-                card->funcCIS[(uint32_t)func - 1U].ioMaxBlockSize = dataBuffer[12U] | ((uint16_t)dataBuffer[13U] << 8U);
+                card->funcCIS[(uint32_t)func - 1U].ioMaxBlockSize =
+                    ((uint32_t)dataBuffer[12U] | ((uint32_t)dataBuffer[13U] << 8U)) & 0xFFFFU;
                 card->funcCIS[(uint32_t)func - 1U].ioOCR = dataBuffer[14U] | ((uint32_t)dataBuffer[15U] << 8U) |
                                                            ((uint32_t)dataBuffer[16U] << 16U) |
                                                            ((uint32_t)dataBuffer[17U] << 24U);
@@ -1583,19 +1601,20 @@ static status_t SDIO_DecodeCIS(
                 card->funcCIS[(uint32_t)func - 1U].ioSBMinPwr     = dataBuffer[21U];
                 card->funcCIS[(uint32_t)func - 1U].ioSBAvgPwr     = dataBuffer[22U];
                 card->funcCIS[(uint32_t)func - 1U].ioSBMaxPwr     = dataBuffer[23U];
-                card->funcCIS[(uint32_t)func - 1U].ioMinBandWidth = dataBuffer[24U] | ((uint16_t)dataBuffer[25U] << 8U);
+                card->funcCIS[(uint32_t)func - 1U].ioMinBandWidth =
+                    ((uint32_t)dataBuffer[24U] | ((uint32_t)dataBuffer[25U] << 8U)) & 0xFFFFU;
                 card->funcCIS[(uint32_t)func - 1U].ioOptimumBandWidth =
-                    dataBuffer[26U] | ((uint16_t)dataBuffer[27U] << 8U);
-                card->funcCIS[(uint32_t)func - 1U].ioReadyTimeout = dataBuffer[28U] | ((uint16_t)dataBuffer[29U] << 8U);
-
+                    ((uint32_t)dataBuffer[26U] | ((uint32_t)dataBuffer[27U] << 8U)) & 0xFFFFU;
+                card->funcCIS[(uint32_t)func - 1U].ioReadyTimeout =
+                    ((uint32_t)dataBuffer[28U] | ((uint32_t)dataBuffer[29U] << 8U)) & 0xFFFFU;
                 card->funcCIS[(uint32_t)func - 1U].ioHighCurrentAvgCurrent =
-                    dataBuffer[34U] | ((uint16_t)dataBuffer[35U] << 8U);
+                    ((uint32_t)dataBuffer[34U] | ((uint32_t)dataBuffer[35U] << 8U)) & 0xFFFFU;
                 card->funcCIS[(uint32_t)func - 1U].ioHighCurrentMaxCurrent =
-                    dataBuffer[36U] | ((uint16_t)dataBuffer[37U] << 8U);
+                    ((uint32_t)dataBuffer[36U] | ((uint32_t)dataBuffer[37U] << 8U)) & 0xFFFFU;
                 card->funcCIS[(uint32_t)func - 1U].ioLowCurrentAvgCurrent =
-                    dataBuffer[38U] | ((uint16_t)dataBuffer[39U] << 8U);
+                    ((uint32_t)dataBuffer[38U] | ((uint32_t)dataBuffer[39U] << 8U)) & 0xFFFFU;
                 card->funcCIS[(uint32_t)func - 1U].ioLowCurrentMaxCurrent =
-                    dataBuffer[40U] | ((uint16_t)dataBuffer[41U] << 8U);
+                    ((uint32_t)dataBuffer[40U] | ((uint32_t)dataBuffer[41U] << 8U)) & 0xFFFFU;
             }
             else
             {
@@ -1729,7 +1748,8 @@ static status_t SDIO_ProbeBusVoltage(sdio_card_t *card)
         ocr |= SDMMC_MASK(kSD_OcrVdd29_30Flag) | SDMMC_MASK(kSD_OcrVdd32_33Flag) | SDMMC_MASK(kSD_OcrVdd33_34Flag);
     }
 
-    if ((card->operationVoltage != kSDMMC_OperationVoltage180V) && (card->usrParam.ioVoltage != NULL) &&
+    if ((!card->usrParam.isSpi) &&
+        (card->operationVoltage != kSDMMC_OperationVoltage180V) && (card->usrParam.ioVoltage != NULL) &&
         (card->usrParam.ioVoltage->type != kSD_IOVoltageCtrlNotSupport) &&
         ((card->host->capability & (uint32_t)kSDMMCHOST_SupportVoltage1v8) != 0U) &&
         ((card->host->capability & ((uint32_t)kSDMMCHOST_SupportSDR104 | (uint32_t)kSDMMCHOST_SupportSDR50 |
@@ -1758,6 +1778,11 @@ static status_t SDIO_ProbeBusVoltage(sdio_card_t *card)
             return kStatus_SDMMC_GoIdleFailed;
         }
 
+        if ((card->usrParam.isSpi) && (kStatus_Success != SDIO_SendCrcEnable(card, true)))
+        {
+            return kStatus_SDMMC_SpiCrcOnOffFailed;
+        }
+
         /* Get IO OCR-CMD5 with arg0 ,set new voltage if needed*/
         if (kStatus_Success != SDIO_SendOperationCondition(card, 0U, NULL))
         {
@@ -1770,7 +1795,7 @@ static status_t SDIO_ProbeBusVoltage(sdio_card_t *card)
         }
 
         /* check if card support 1.8V */
-        if ((accept1V8 & SDMMC_MASK(kSD_OcrSwitch18AcceptFlag)) != 0U)
+        if ((!card->usrParam.isSpi) && ((accept1V8 & SDMMC_MASK(kSD_OcrSwitch18AcceptFlag)) != 0U))
         {
             if ((card->usrParam.ioVoltage != NULL) && (card->usrParam.ioVoltage->type == kSD_IOVoltageCtrlNotSupport))
             {
@@ -1811,9 +1836,13 @@ static status_t sdiocard_init(sdio_card_t *card)
     {
         return kStatus_SDMMC_HostNotReady;
     }
-    /* Identify mode ,set clock to 400KHZ. */
-    card->busClock_Hz = SDMMCHOST_SetCardClock(card->host, SDMMC_CLOCK_400KHZ);
-    SDMMCHOST_SetCardBusWidth(card->host, kSDMMC_BusWdith1Bit);
+
+    if (!card->usrParam.isSpi)
+    {
+        /* Identify mode ,set clock to 400KHZ. */
+        card->busClock_Hz = SDMMCHOST_SetCardClock(card->host, SDMMC_CLOCK_400KHZ);
+        SDMMCHOST_SetCardBusWidth(card->host, kSDMMC_BusWdith1Bit);
+    }
 
     error = SDIO_ProbeBusVoltage(card);
     if (error != kStatus_Success)
@@ -1827,15 +1856,18 @@ static status_t sdiocard_init(sdio_card_t *card)
         return kStatus_SDMMC_SDIO_InvalidCard;
     }
 
-    /* send relative address ,cmd3*/
-    if (kStatus_Success != SDIO_SendRca(card))
+    if (!card->usrParam.isSpi)
     {
-        return kStatus_SDMMC_SendRelativeAddressFailed;
-    }
-    /* select card cmd7 */
-    if (kStatus_Success != SDIO_SelectCard(card, true))
-    {
-        return kStatus_SDMMC_SelectCardFailed;
+        /* send relative address ,cmd3*/
+        if (kStatus_Success != SDIO_SendRca(card))
+        {
+            return kStatus_SDMMC_SendRelativeAddressFailed;
+        }
+        /* select card cmd7 */
+        if (kStatus_Success != SDIO_SelectCard(card, true))
+        {
+            return kStatus_SDMMC_SelectCardFailed;
+        }
     }
 
     /* get card capability */
@@ -1850,16 +1882,19 @@ static status_t sdiocard_init(sdio_card_t *card)
         return kStatus_SDMMC_SDIO_ReadCISFail;
     }
 
-    /* switch data bus width */
-    if (kStatus_Success != SDIO_SetMaxDataBusWidth(card))
+    if (!card->usrParam.isSpi)
     {
-        return kStatus_SDMMC_SetDataBusWidthFailed;
-    }
+        /* switch data bus width */
+        if (kStatus_Success != SDIO_SetMaxDataBusWidth(card))
+        {
+            return kStatus_SDMMC_SetDataBusWidthFailed;
+        }
 
-    /* trying switch to card support timing mode. */
-    if (kStatus_Success != SDIO_SelectBusTiming(card))
-    {
-        return kStatus_SDMMC_SDIO_SwitchHighSpeedFail;
+        /* trying switch to card support timing mode. */
+        if (kStatus_Success != SDIO_SelectBusTiming(card))
+        {
+            return kStatus_SDMMC_SDIO_SwitchHighSpeedFail;
+        }
     }
 
     return kStatus_Success;
@@ -1906,7 +1941,8 @@ status_t SDIO_HostInit(sdio_card_t *card)
         }
     }
 
-    if ((card->usrParam.cd->type == kSD_DetectCardByHostCD) || (card->usrParam.cd->type == kSD_DetectCardByHostDATA3))
+    if ((!card->usrParam.isSpi) && ((card->usrParam.cd->type == kSD_DetectCardByHostCD) ||
+                                    (card->usrParam.cd->type == kSD_DetectCardByHostDATA3)))
     {
         (void)SDMMCHOST_CardDetectInit(card->host, card->usrParam.cd);
     }
@@ -1940,6 +1976,12 @@ void SDIO_HostDoReset(sdio_card_t *card)
 status_t SDIO_PollingCardInsert(sdio_card_t *card, uint32_t status)
 {
     assert(card != NULL);
+
+    if (card->usrParam.isSpi)
+    {
+        return kStatus_Success;
+    }
+
     assert(card->usrParam.cd != NULL);
 
     if (card->usrParam.cd->type == kSD_DetectCardByGpioCD)
@@ -1985,6 +2027,12 @@ status_t SDIO_PollingCardInsert(sdio_card_t *card, uint32_t status)
 bool SDIO_IsCardPresent(sdio_card_t *card)
 {
     assert(card != NULL);
+
+    if (card->usrParam.isSpi)
+    {
+        return true;
+    }
+
     assert(card->usrParam.cd != NULL);
 
     if (card->usrParam.cd->type == kSD_DetectCardByGpioCD)
@@ -2285,6 +2333,8 @@ status_t SDIO_HandlePendingIOInterrupt(sdio_card_t *card)
     /* call IRQ handler directly if one IRQ handler only */
     if (card->ioIntNums == 1U)
     {
+        assert(card->ioIntIndex >= 1U && card->ioIntIndex <= FSL_SDIO_MAX_IO_NUMS);
+
         if (card->ioIRQHandler[card->ioIntIndex - 1U] != NULL)
         {
             (card->ioIRQHandler[card->ioIntIndex - 1U])(card, card->ioIntIndex);

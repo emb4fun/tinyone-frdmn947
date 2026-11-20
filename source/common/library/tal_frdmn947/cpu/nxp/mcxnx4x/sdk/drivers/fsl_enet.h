@@ -1,5 +1,5 @@
 /*
- * Copyright 2022-2025 NXP
+ * Copyright 2022-2026 NXP
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -20,7 +20,7 @@
 /*! @name Driver version */
 /*@{*/
 /*! @brief Defines the driver version. */
-#define FSL_ENET_DRIVER_VERSION (MAKE_VERSION(2, 1, 4))
+#define FSL_ENET_DRIVER_VERSION (MAKE_VERSION(2, 2, 4))
 /*@}*/
 
 /*! @name Control and status region bit masks of the receive buffer descriptor. */
@@ -58,19 +58,19 @@
 /*! @brief Defines for read format. */
 #define ENET_TXDESCRIP_RD_BL1_MASK  (0x3fffU)
 #define ENET_TXDESCRIP_RD_BL2_MASK  (ENET_TXDESCRIP_RD_BL1_MASK << 16)
-#define ENET_TXDESCRIP_RD_BL1(n)    ((uint32_t)(n) & ENET_TXDESCRIP_RD_BL1_MASK)
-#define ENET_TXDESCRIP_RD_BL2(n)    (((uint32_t)(n) & ENET_TXDESCRIP_RD_BL1_MASK) << 16)
+#define ENET_TXDESCRIP_RD_BL1(n)    ((uint32_t)(n)&ENET_TXDESCRIP_RD_BL1_MASK)
+#define ENET_TXDESCRIP_RD_BL2(n)    (((uint32_t)(n)&ENET_TXDESCRIP_RD_BL1_MASK) << 16)
 #define ENET_TXDESCRIP_RD_TTSE_MASK (1UL << 30)
 #define ENET_TXDESCRIP_RD_IOC_MASK  (1UL << 31)
 
 #define ENET_TXDESCRIP_RD_FL_MASK   (0x7FFFU)
-#define ENET_TXDESCRIP_RD_FL(n)     ((uint32_t)(n) & ENET_TXDESCRIP_RD_FL_MASK)
-#define ENET_TXDESCRIP_RD_CIC(n)    (((uint32_t)(n) & 0x3U) << 16)
+#define ENET_TXDESCRIP_RD_FL(n)     ((uint32_t)(n)&ENET_TXDESCRIP_RD_FL_MASK)
+#define ENET_TXDESCRIP_RD_CIC(n)    (((uint32_t)(n)&0x3U) << 16)
 #define ENET_TXDESCRIP_RD_TSE_MASK  (1UL << 18)
-#define ENET_TXDESCRIP_RD_SLOT(n)   (((uint32_t)(n) & 0x0fU) << 19)
-#define ENET_TXDESCRIP_RD_SAIC(n)   (((uint32_t)(n) & 0x07U) << 23)
-#define ENET_TXDESCRIP_RD_CPC(n)    (((uint32_t)(n) & 0x03U) << 26)
-#define ENET_TXDESCRIP_RD_LDFD(n)   (((uint32_t)(n) & 0x03U) << 28)
+#define ENET_TXDESCRIP_RD_SLOT(n)   (((uint32_t)(n)&0x0fU) << 19)
+#define ENET_TXDESCRIP_RD_SAIC(n)   (((uint32_t)(n)&0x07U) << 23)
+#define ENET_TXDESCRIP_RD_CPC(n)    (((uint32_t)(n)&0x03U) << 26)
+#define ENET_TXDESCRIP_RD_LDFD(n)   (((uint32_t)(n)&0x03U) << 28)
 #define ENET_TXDESCRIP_RD_LD_MASK   (1UL << 28)
 #define ENET_TXDESCRIP_RD_FD_MASK   (1UL << 29)
 #define ENET_TXDESCRIP_RD_CTXT_MASK (1UL << 30)
@@ -93,14 +93,18 @@
 
 /*! @name Defines some Ethernet parameters. */
 /*@{*/
-#define ENET_FRAME_MAX_FRAMELEN      (1518U) /*!< Default maximum ethernet frame size. */
-#define ENET_FCS_LEN                 (4U)    /*!< Ethernet Rx frame FCS length. */
-#define ENET_ADDR_ALIGNMENT          (0x3U)  /*!< Recommended ethernet buffer alignment. */
-#define ENET_BUFF_ALIGNMENT          (4U)    /*!< Receive buffer alignment shall be 4bytes-aligned. */
-#define ENET_RING_NUM_MAX            (2U)    /*!< The maximum number of Tx/Rx descriptor rings. */
-#define ENET_MTL_RXFIFOSIZE          (2048U) /*!< The Rx fifo size. */
-#define ENET_MTL_TXFIFOSIZE          (2048U) /*!< The Tx fifo size. */
-#define ENET_MACINT_ENUM_OFFSET      (16U)   /*!< The offset for mac interrupt in enum type. */
+#define ENET_FRAME_MAX_FRAMELEN (1518U)        /*!< Default maximum ethernet frame size. */
+#define ENET_FCS_LEN            (4U)           /*!< Ethernet Rx frame FCS length. */
+#define ENET_ADDR_ALIGNMENT     (0x3U)         /*!< Recommended ethernet buffer alignment. */
+#define ENET_BUFF_ALIGNMENT     (4U)           /*!< Receive buffer alignment shall be 4bytes-aligned. */
+#if ENET_DMA_CH_COUNT < ENET_MTL_QUEUE_COUNT
+#define ENET_RING_NUM_MAX ENET_DMA_CH_COUNT    /*!< The maximum number of Tx/Rx descriptor rings. */
+#else
+#define ENET_RING_NUM_MAX ENET_MTL_QUEUE_COUNT /*!< The maximum number of Tx/Rx descriptor rings. */
+#endif                                         /* ENET_DMA_CH_COUNT < ENET_MTL_QUEUE_COUNT */
+#define ENET_MTL_RXFIFOSIZE          (2048U)   /*!< The Rx fifo size. */
+#define ENET_MTL_TXFIFOSIZE          (2048U)   /*!< The Tx fifo size. */
+#define ENET_MACINT_ENUM_OFFSET      (16U)     /*!< The offset for mac interrupt in enum type. */
 #define ENET_FRAME_TX_LEN_LIMITATION (ENET_TXDESCRIP_RD_BL1_MASK) /*!< The Tx frame length software limitation. */
 #define ENET_FRAME_RX_ERROR_BITS(x)  (((x) >> 19U) & 0x3FU)       /*!< The Rx frame error bits field. */
 /*@}*/
@@ -586,13 +590,34 @@ typedef struct _enet_tx_frame_struct
     void *context;                     /*!< Driver reclaims and gives it in Tx over callback. */
 } enet_tx_frame_struct_t;
 
-/*! @brief Ethernet VLAN Tag. */
+/*! @brief IEEE 802.1Q VLAN Tag Control Information (TCI).
+ *
+ * This structure describes the 16-bit VLAN tag value packed into the ENET
+ * VLAN match/insert register fields (VL/VLT):
+ * - bits[15:13]: PCP
+ * - bit[12]:    DEI/CFI
+ * - bits[11:0]: VID
+ */
+typedef struct _enet_vlan_tci
+{
+    uint16_t pcp : 3;  /*!< IEEE 802.1Q Priority Code Point (bits[15:13]). */
+    uint16_t dei : 1;  /*!< IEEE 802.1Q Drop Eligible Indicator / CFI (bit[12]). */
+    uint16_t vid : 12; /*!< IEEE 802.1Q VLAN Identifier (bits[11:0]). */
+} enet_vlan_tci_t;
+
+/*! @brief IEEE 802.1Q VLAN tag description.
+ *
+ * This structure separates the VLAN TPID selector from the VLAN Tag Control
+ * Information (TCI). The TCI fields are packed by the driver into the ENET
+ * VLAN match/insert register fields.
+ *
+ * @note This is a configuration structure, not a raw packed Ethernet header
+ * representation.
+ */
 typedef struct _enet_vlan_tag
 {
-    enet_vlan_tpid_t tpid; /*!< VLAN TPID. */
-    uint16_t pcp : 3;      /*!< VLAN Priority. */
-    uint16_t dei : 1;      /*!< Drop Eligible indicator. */
-    uint16_t vid : 12;     /*!< VLAN Identifier. */
+    enet_vlan_tpid_t tpid; /*!< VLAN TPID selector (C-VLAN or S-VLAN). */
+    enet_vlan_tci_t tci;   /*!< VLAN TCI value used for ENET VLAN match/insert fields. */
 } enet_vlan_tag_t;
 
 /*! @brief Ethernet VLAN configuration for Tx. */
@@ -937,12 +962,16 @@ void ENET_EnterPowerDown(ENET_Type *base, uint32_t *wakeFilter);
  */
 static inline void ENET_ExitPowerDown(ENET_Type *base)
 {
+    uint8_t index;
+
     /* Clear and status ans reset the power down. */
     base->MAC_PMT_CONTROL_STATUS &= ~ENET_MAC_PMT_CONTROL_STATUS_PWRDWN_MASK;
 
     /* Restore the Tx which is disabled when enter power down mode. */
-    base->DMA_CH[0].DMA_CHX_TX_CTRL |= ENET_DMA_CH_DMA_CHX_TX_CTRL_ST_MASK;
-    base->DMA_CH[1].DMA_CHX_TX_CTRL |= ENET_DMA_CH_DMA_CHX_TX_CTRL_ST_MASK;
+    for (index = 0U; index < ENET_RING_NUM_MAX; index++)
+    {
+        base->DMA_CH[index].DMA_CHX_TX_CTRL |= ENET_DMA_CH_DMA_CHX_TX_CTRL_ST_MASK;
+    }
     base->MAC_CONFIGURATION |= ENET_MAC_CONFIGURATION_TE_MASK;
 }
 
@@ -981,8 +1010,9 @@ status_t ENET_SetTxInnerVlan(ENET_Type *base, enet_vlan_tx_config_t *config);
 /*!
  * @brief Enables the ENET DMA and MAC interrupts.
  *
- * This function enables the ENET interrupt according to the provided mask. The mask
- * is a logical OR of enet_dma_interrupt_enable_t and enet_mac_interrupt_enable_t.
+ * This function enables the ENET interrupts according to the provided mask.
+ * Already enabled interrupts stay enabled even if not listed in the provided mask.
+ * The mask is a logical OR of enet_dma_interrupt_enable_t and enet_mac_interrupt_enable_t.
  * For example, to enable the dma and mac interrupt, do the following.
  * @code
  *     ENET_EnableInterrupts(ENET, kENET_DmaRx | kENET_DmaTx | kENET_MacPmt);
@@ -1340,6 +1370,12 @@ void ENET_ReclaimTxDescriptor(ENET_Type *base, enet_handle_t *handle, uint8_t ch
  * @param handle The ENET handler pointer.
  */
 void ENET_IRQHandler(ENET_Type *base, enet_handle_t *handle);
+/*!
+ * @brief Common IRQ handler entry for ENET parameterized by instance.
+ *
+ * @param instance  ENET instance index.
+ */
+void ENET_DriverIRQHandler(uint32_t instance);
 
 /* @} */
 

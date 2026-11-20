@@ -15,6 +15,7 @@
 #if (defined(SDK_COMPONENT_DEPENDENCY_FSL_COMMON) && (SDK_COMPONENT_DEPENDENCY_FSL_COMMON > 0U))
 #include "fsl_common.h"
 #else
+#include <stdint.h>
 #endif
 
 #include "fsl_os_abstraction_config.h"
@@ -217,10 +218,10 @@ extern const uint8_t gUseRtos_c;
 #define OSA_EVENT_HANDLE_SIZE (16U)
 #endif /* FSL_OSA_TASK_ENABLE */
 #if (defined(FSL_OSA_BM_TIMEOUT_ENABLE) && (FSL_OSA_BM_TIMEOUT_ENABLE > 0U))
-#define OSA_SEM_HANDLE_SIZE   (16U)
+#define OSA_SEM_HANDLE_SIZE   (20U)
 #define OSA_MUTEX_HANDLE_SIZE (12U)
 #else
-#define OSA_SEM_HANDLE_SIZE   (8U)
+#define OSA_SEM_HANDLE_SIZE   (12U)
 #define OSA_MUTEX_HANDLE_SIZE (4U)
 #endif
 #if (defined(FSL_OSA_TASK_ENABLE) && (FSL_OSA_TASK_ENABLE > 0U))
@@ -447,11 +448,11 @@ extern const uint8_t gUseRtos_c;
     uint32_t name[(OSA_MSGQ_HANDLE_SIZE + sizeof(uint32_t) - 1U) / sizeof(uint32_t)]
 #elif defined(__ZEPHYR__)
 #define OSA_MSGQ_HANDLE_DEFINE(name, numberOfMsgs, msgSize) \
-    uint32_t name[(OSA_MSGQ_HANDLE_SIZE + (numberOfMsgs * msgSize) + sizeof(uint32_t) - 1U) / sizeof(uint32_t)]
+    uint32_t name[(OSA_MSGQ_HANDLE_SIZE + ((numberOfMsgs) * (msgSize)) + sizeof(uint32_t) - 1U) / sizeof(uint32_t)]
 #else
 /*< Macro For BARE_MATEL and FREE_RTOS static allocation*/
 #define OSA_MSGQ_HANDLE_DEFINE(name, numberOfMsgs, msgSize) \
-    uint32_t name[((OSA_MSGQ_HANDLE_SIZE + numberOfMsgs * msgSize) + sizeof(uint32_t) - 1U) / sizeof(uint32_t)]
+    uint32_t name[((OSA_MSGQ_HANDLE_SIZE + (numberOfMsgs) * (msgSize)) + sizeof(uint32_t) - 1U) / sizeof(uint32_t)]
 #endif
 
 /*!

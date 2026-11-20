@@ -81,30 +81,32 @@ static void SDMMCHOST_DetectCardInsertByHost(USDHC_Type *base, void *userData)
 {
     sd_detect_card_t *cd = NULL;
 
+    if (userData == NULL)
+    {
+        return;
+    }
+
     (void)SDMMC_OSAEventSet(&(((sdmmchost_t *)userData)->hostEvent), SDMMC_OSA_EVENT_CARD_INSERTED);
     (void)SDMMC_OSAEventClear(&(((sdmmchost_t *)userData)->hostEvent), SDMMC_OSA_EVENT_CARD_REMOVED);
 
-    if (userData != NULL)
+    cd = (sd_detect_card_t *)(((sdmmchost_t *)userData)->cd);
+    if (cd != NULL)
     {
-        cd = (sd_detect_card_t *)(((sdmmchost_t *)userData)->cd);
-        if (cd != NULL)
+        if (cd->callback != NULL)
         {
-            if (cd->callback != NULL)
+            cd->callback(true, cd->userData);
+        }
+        if (cd->type == kSD_DetectCardByHostDATA3)
+        {
+            USDHC_DisableInterruptSignal(base, kUSDHC_CardInsertionFlag);
+            if (cd->dat3PullFunc != NULL)
             {
-                cd->callback(true, cd->userData);
+                cd->dat3PullFunc(kSD_DAT3PullUp);
             }
-            if (cd->type == kSD_DetectCardByHostDATA3)
-            {
-                USDHC_DisableInterruptSignal(base, kUSDHC_CardInsertionFlag);
-                if (cd->dat3PullFunc != NULL)
-                {
-                    cd->dat3PullFunc(kSD_DAT3PullUp);
-                }
-            }
-            else
-            {
-                USDHC_EnableInterruptSignal(base, kUSDHC_CardRemovalFlag);
-            }
+        }
+        else
+        {
+            USDHC_EnableInterruptSignal(base, kUSDHC_CardRemovalFlag);
         }
     }
 }
@@ -113,31 +115,33 @@ static void SDMMCHOST_DetectCardRemoveByHost(USDHC_Type *base, void *userData)
 {
     sd_detect_card_t *cd = NULL;
 
+    if (userData == NULL)
+    {
+        return;
+    }
+
     (void)SDMMC_OSAEventSet(&(((sdmmchost_t *)userData)->hostEvent), SDMMC_OSA_EVENT_CARD_REMOVED);
     (void)SDMMC_OSAEventClear(&(((sdmmchost_t *)userData)->hostEvent), SDMMC_OSA_EVENT_CARD_INSERTED);
 
-    if (userData != NULL)
+    cd = (sd_detect_card_t *)(((sdmmchost_t *)userData)->cd);
+    if (cd != NULL)
     {
-        cd = (sd_detect_card_t *)(((sdmmchost_t *)userData)->cd);
-        if (cd != NULL)
+        if (cd->callback != NULL)
         {
-            if (cd->callback != NULL)
-            {
-                cd->callback(false, cd->userData);
-            }
+            cd->callback(false, cd->userData);
+        }
 
-            if (cd->type == kSD_DetectCardByHostDATA3)
+        if (cd->type == kSD_DetectCardByHostDATA3)
+        {
+            USDHC_DisableInterruptSignal(base, kUSDHC_CardRemovalFlag);
+            if (cd->dat3PullFunc != NULL)
             {
-                USDHC_DisableInterruptSignal(base, kUSDHC_CardRemovalFlag);
-                if (cd->dat3PullFunc != NULL)
-                {
-                    cd->dat3PullFunc(kSD_DAT3PullUp);
-                }
+                cd->dat3PullFunc(kSD_DAT3PullUp);
             }
-            else
-            {
-                USDHC_EnableInterruptSignal(base, kUSDHC_CardInsertionFlag);
-            }
+        }
+        else
+        {
+            USDHC_EnableInterruptSignal(base, kUSDHC_CardInsertionFlag);
         }
     }
 }
@@ -145,8 +149,6 @@ static void SDMMCHOST_DetectCardRemoveByHost(USDHC_Type *base, void *userData)
 static void SDMMCHOST_CardInterrupt(USDHC_Type *base, void *userData)
 {
     sdio_card_int_t *cardInt = NULL;
-
-    (void)base;
 
     /* application callback */
     if (userData != NULL)
@@ -345,9 +347,6 @@ static void SDMMCHOST_TransferCompleteCallback(USDHC_Type *base,
 {
     uint32_t eventStatus = 0U;
 
-    (void)base;
-    (void)handle;
-
     if (status == kStatus_USDHC_TransferDataFailed)
     {
         eventStatus = SDMMC_OSA_EVENT_TRANSFER_DATA_FAIL;
@@ -471,6 +470,7 @@ status_t SDMMCHOST_TransferFunction(sdmmchost_t *host, sdmmchost_transfer_t *con
             unAlignSize          = ((uint32_t)content->data->rxData -
                            (((uint32_t)content->data->rxData) & (~(SDMMC_DATA_BUFFER_ALIGN_CACHE - 1))));
             sgDataList1.dataSize = unAlignSize;
+            assert(SDMMC_DATA_BUFFER_ALIGN_CACHE >= unAlignSize);
             unAlignSize          = SDMMC_DATA_BUFFER_ALIGN_CACHE - unAlignSize;
 
 #if ((defined __DCACHE_PRESENT) && __DCACHE_PRESENT) || (defined FSL_FEATURE_HAS_L1CACHE && FSL_FEATURE_HAS_L1CACHE)
@@ -595,7 +595,11 @@ status_t SDMMCHOST_TransferFunction(sdmmchost_t *host, sdmmchost_transfer_t *con
 #if defined SDMMCHOST_ENABLE_CACHE_LINE_ALIGN_TRANSFER && SDMMCHOST_ENABLE_CACHE_LINE_ALIGN_TRANSFER
 status_t SDMMCHOST_ScatterGatherTransferFunction(sdmmchost_t *host, sdmmchost_scatter_gather_transfer_t *content)
 {
+#if ((defined __DCACHE_PRESENT) && __DCACHE_PRESENT) || (defined FSL_FEATURE_HAS_L1CACHE && FSL_FEATURE_HAS_L1CACHE)
+#if !(defined(FSL_SDK_ENABLE_DRIVER_CACHE_CONTROL) && FSL_SDK_ENABLE_DRIVER_CACHE_CONTROL)
     sdmmchost_scatter_gather_data_list_t *dataList;
+#endif
+#endif
     status_t error = kStatus_Success;
     uint32_t event = 0U;
     usdhc_adma_config_t dmaConfig;
@@ -722,8 +726,6 @@ static void SDMMCHOST_ErrorRecovery(USDHC_Type *base)
 void SDMMCHOST_SetCardPower(sdmmchost_t *host, bool enable)
 {
     /* host not support */
-    (void)host;
-    (void)enable;
 }
 
 void SDMMCHOST_SetCardBusWidth(sdmmchost_t *host, uint32_t dataBusWidth)
@@ -742,14 +744,14 @@ status_t SDMMCHOST_Init(sdmmchost_t *host)
     usdhc_transfer_callback_t usdhcCallback = {0};
     usdhc_host_t *usdhcHost                 = &(host->hostController);
 #if defined FSL_FEATURE_USDHC_INSTANCE_SUPPORT_8_BIT_WIDTHn
-    uint32_t bus8bitCapability = (uint32_t)FSL_FEATURE_USDHC_INSTANCE_SUPPORT_8_BIT_WIDTHn(host->hostController.base);
+    uint32_t bus8bitCapability = FSL_FEATURE_USDHC_INSTANCE_SUPPORT_8_BIT_WIDTHn(host->hostController.base) == 1 ? 1U : 0U;
 #else
     uint32_t bus8bitCapability    = 0U;
 #endif
 
 #if (defined(FSL_FEATURE_USDHC_HAS_HS400_MODE) && (FSL_FEATURE_USDHC_HAS_HS400_MODE))
 #if defined FSL_FEATURE_USDHC_INSTANCE_SUPPORT_HS400_MODEn
-    uint32_t hs400Capability = (uint32_t)FSL_FEATURE_USDHC_INSTANCE_SUPPORT_HS400_MODEn(host->hostController.base);
+    uint32_t hs400Capability = FSL_FEATURE_USDHC_INSTANCE_SUPPORT_HS400_MODEn(host->hostController.base) == 1 ? 1U : 0U;
 #else
     uint32_t hs400Capability = 0U;
 #endif
@@ -872,9 +874,6 @@ void SDMMCHOST_SwitchToVoltage(sdmmchost_t *host, uint32_t voltage)
     {
         UDSHC_SelectVoltage(host->hostController.base, false);
     }
-#else
-    (void)host;
-    (void)voltage;
 #endif
 }
 

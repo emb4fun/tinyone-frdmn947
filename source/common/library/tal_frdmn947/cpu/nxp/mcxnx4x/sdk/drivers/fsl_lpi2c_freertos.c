@@ -16,6 +16,10 @@ static void LPI2C_RTOS_Callback(LPI2C_Type *base, lpi2c_master_handle_t *drv_han
 {
     lpi2c_rtos_handle_t *handle = (lpi2c_rtos_handle_t *)userData;
     BaseType_t reschedule = pdFALSE;
+    if (handle == NULL)
+    {
+        return;
+    }
     handle->async_status = status;
     (void)xSemaphoreGiveFromISR(handle->semaphore, &reschedule);
     portYIELD_FROM_ISR(reschedule);
@@ -99,7 +103,7 @@ status_t LPI2C_RTOS_Transfer(lpi2c_rtos_handle_t *handle, lpi2c_master_transfer_
     status_t status;
 
     /* Lock resource mutex */
-    if (xSemaphoreTake(handle->mutex, portMAX_DELAY) != pdTRUE)
+    if (xSemaphoreTake(handle->mutex, portMAX_DELAY) != (BaseType_t)pdTRUE)
     {
         return kStatus_LPI2C_Busy;
     }

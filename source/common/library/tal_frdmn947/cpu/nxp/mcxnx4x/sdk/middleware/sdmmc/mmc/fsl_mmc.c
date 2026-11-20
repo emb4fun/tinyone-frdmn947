@@ -492,6 +492,7 @@ static status_t MMC_Transfer(mmc_card_t *card, sdmmchost_transfer_t *content, ui
 
             if (card->busTiming == kMMC_HighSpeed200Timing)
             {
+                assert(retuningCount > 0U);
                 if (--retuningCount == 0U)
                 {
                     break;
@@ -562,6 +563,7 @@ static status_t MMC_SendStatus(mmc_card_t *card, uint32_t *status)
 status_t MMC_PollingCardStatusBusy(mmc_card_t *card, bool checkStatus, uint32_t timeoutMs)
 {
     assert(card != NULL);
+    assert(timeoutMs <= UINT32_MAX / 1000U);
 
     uint32_t statusTimeoutUs = timeoutMs * 1000U;
     bool cardBusy            = false;
@@ -806,6 +808,8 @@ static void MMC_DecodeCsd(mmc_card_t *card, uint32_t *rawCsd)
     if (card->csd.deviceSize != 0xFFFU)
     {
         multiplier                = (2UL << (card->csd.deviceSizeMultiplier + 2U - 1U));
+
+        assert(card->csd.deviceSize + 1UL <= UINT32_MAX / multiplier);
         card->userPartitionBlocks = (((card->csd.deviceSize + 1UL) * multiplier) / FSL_SDMMC_DEFAULT_BLOCK_SIZE);
     }
 
@@ -819,14 +823,20 @@ static void MMC_SetMaxFrequency(mmc_card_t *card)
     uint32_t frequencyUnit;
     uint32_t multiplierFactor;
     uint32_t maxBusClock_Hz;
+    uint32_t index;
 
     /* g_fsdhcCommandUnitInTranSpeed and g_transerSpeedMultiplierFactor are used to calculate the max speed in normal
     mode not high speed mode.
     For cards supporting version 4.0, 4.1, and 4.2 of the specification, the value shall be 20MHz(0x2A).
     For cards supporting version 4.3, the value shall be 26 MHz (0x32H). In High speed mode, the max
     frequency is decided by CARD_TYPE in Extended CSD. */
-    frequencyUnit     = g_transerSpeedFrequencyUnit[READ_MMC_TRANSFER_SPEED_FREQUENCY_UNIT(card->csd)];
+    index = READ_MMC_TRANSFER_SPEED_FREQUENCY_UNIT(card->csd);
+
+    assert(index < (sizeof(g_transerSpeedFrequencyUnit) / sizeof(g_transerSpeedFrequencyUnit[0])));
+    frequencyUnit     = g_transerSpeedFrequencyUnit[index];
     multiplierFactor  = g_transerSpeedMultiplierFactor[READ_MMC_TRANSFER_SPEED_MULTIPLIER(card->csd)];
+
+    assert(frequencyUnit <= UINT32_MAX / multiplierFactor);
     maxBusClock_Hz    = (frequencyUnit * multiplierFactor) / DIVIDER_IN_TRANSFER_SPEED;
     card->busClock_Hz = SDMMCHOST_SetCardClock(card->host, maxBusClock_Hz);
 }
@@ -1313,7 +1323,7 @@ static status_t MMC_SetDataBusWidth(mmc_card_t *card, mmc_data_bus_width_t width
         return kStatus_SDMMC_ConfigureExtendedCsdFailed;
     }
     /* restore data bus width */
-    card->extendedCsd.dataBusWidth = (uint8_t)width;
+    card->extendedCsd.dataBusWidth = width & 0xFFU;
 
     return kStatus_Success;
 }
@@ -1853,6 +1863,8 @@ static status_t MMC_CheckBlockRange(mmc_card_t *card, uint32_t startBlock, uint3
             error = kStatus_InvalidArgument;
             break;
     }
+
+    assert(startBlock <= UINT32_MAX - blockCount);
     /* Check if the block range accessed is within current partition's block boundary. */
     if ((error == kStatus_Success) && ((startBlock + blockCount) > partitionBlocks))
     {
@@ -2360,7 +2372,7 @@ status_t MMC_SelectPartition(mmc_card_t *card, mmc_access_partition_t partitionN
     (void)SDMMC_OSAMutexLock(&card->lock, osaWaitForever_c);
 
     bootConfig = card->extendedCsd.partitionConfig;
-    bootConfig &= ~(uint8_t)MMC_PARTITION_CONFIG_PARTITION_ACCESS_MASK;
+    bootConfig &= (uint8_t)((~MMC_PARTITION_CONFIG_PARTITION_ACCESS_MASK) & 0xFFU);
     bootConfig |= ((uint8_t)partitionNumber << MMC_PARTITION_CONFIG_PARTITION_ACCESS_SHIFT);
 
     extendedCsdconfig.accessMode = kMMC_ExtendedCsdAccessModeWriteBits;
@@ -2412,7 +2424,7 @@ status_t MMC_ReadBlocks(mmc_card_t *card, uint8_t *buffer, uint32_t startBlock, 
         while (blockLeft != 0U)
         {
             nextBuffer = (uint8_t *)((uint32_t)buffer + blockDone * FSL_SDMMC_DEFAULT_BLOCK_SIZE);
-            if (!card->noInteralAlign && (!dataAddrAlign || ((((uint32_t)nextBuffer) & (sizeof(uint32_t) - 1U)) != 0U)))
+            if (!card->noInteralAlign && (!dataAddrAlign || ((((uint32_t)nextBuffer) & (SDMMC_DATA_BUFFER_ALIGN_CACHE - 1U)) != 0U)))
             {
                 blockLeft--;
                 blockCountOneTime = 1U;
@@ -2484,7 +2496,7 @@ status_t MMC_WriteBlocks(mmc_card_t *card, const uint8_t *buffer, uint32_t start
         while (blockLeft != 0U)
         {
             nextBuffer = (uint8_t *)((uint32_t)buffer + blockDone * FSL_SDMMC_DEFAULT_BLOCK_SIZE);
-            if (!card->noInteralAlign && (!dataAddrAlign || (0U != (((uint32_t)nextBuffer) & (sizeof(uint32_t) - 1U)))))
+            if (!card->noInteralAlign && (!dataAddrAlign || (0U != (((uint32_t)nextBuffer) & (SDMMC_DATA_BUFFER_ALIGN_CACHE - 1U)))))
             {
                 blockLeft--;
                 blockCountOneTime = 1U;
@@ -2731,6 +2743,10 @@ status_t MMC_EraseGroups(mmc_card_t *card, uint32_t startGroup, uint32_t endGrou
         /* Calculate the start group address and end group address */
         startGroupAddress = startGroup;
         endGroupAddress   = endGroup;
+
+        assert(startGroupAddress <= UINT32_MAX / card->eraseGroupBlocks);
+        assert(endGroupAddress <= UINT32_MAX / card->eraseGroupBlocks);
+
         if ((card->flags & (uint32_t)kMMC_SupportHighCapacityFlag) != 0U)
         {
             /* The implementation of a higher than 2GB of density of memory will not be backwards compatible with the
@@ -2741,6 +2757,9 @@ status_t MMC_EraseGroups(mmc_card_t *card, uint32_t startGroup, uint32_t endGrou
         }
         else
         {
+            assert(startGroupAddress * card->eraseGroupBlocks <= UINT32_MAX / FSL_SDMMC_DEFAULT_BLOCK_SIZE);
+            assert(endGroupAddress * card->eraseGroupBlocks <= UINT32_MAX / FSL_SDMMC_DEFAULT_BLOCK_SIZE);
+
             /* The address unit is byte when card capacity is lower than 2GB */
             startGroupAddress = (startGroupAddress * (card->eraseGroupBlocks) * FSL_SDMMC_DEFAULT_BLOCK_SIZE);
             endGroupAddress   = (endGroupAddress * (card->eraseGroupBlocks) * FSL_SDMMC_DEFAULT_BLOCK_SIZE);
@@ -2752,6 +2771,10 @@ status_t MMC_EraseGroups(mmc_card_t *card, uint32_t startGroup, uint32_t endGrou
             if ((0U != (card->flags & (uint32_t)kMMC_SupportHighCapacityFlag)) &&
                 (card->extendedCsd.highCapacityEraseTimeout != 0U))
             {
+                assert(endGroup >= startGroup);
+                assert(endGroup - startGroup <= UINT32_MAX - 1U);
+                assert((uint32_t)card->extendedCsd.highCapacityEraseTimeout * 300U <= UINT32_MAX / ((endGroup - startGroup + 1U)));
+
                 eraseTimeout =
                     (uint32_t)card->extendedCsd.highCapacityEraseTimeout * 300U * (endGroup - startGroup + 1U);
             }
@@ -2799,7 +2822,7 @@ status_t MMC_SetBootPartitionWP(mmc_card_t *card, mmc_boot_partition_wp_t bootPa
     mmc_extended_csd_config_t extendedCsdconfig;
     extendedCsdconfig.accessMode = kMMC_ExtendedCsdAccessModeWriteBits;
     extendedCsdconfig.ByteIndex  = (uint8_t)kMMC_ExtendedCsdIndexBootPartitionWP;
-    extendedCsdconfig.ByteValue  = (uint8_t)bootPartitionWP;
+    extendedCsdconfig.ByteValue  = bootPartitionWP & 0xFFU;
     extendedCsdconfig.commandSet = kMMC_CommandSetStandard;
     if (kStatus_Success != MMC_SetExtendedCsdConfig(card, &extendedCsdconfig, 0U))
     {
@@ -2828,8 +2851,8 @@ status_t MMC_SetBootConfig(mmc_card_t *card, const mmc_boot_config_t *config)
 
     /* Set the BOOT_CONFIG field of Extended CSD */
     bootParameter = card->extendedCsd.partitionConfig;
-    bootParameter &=
-        ~((uint8_t)MMC_PARTITION_CONFIG_BOOT_ACK_MASK | (uint8_t)MMC_PARTITION_CONFIG_PARTITION_ENABLE_MASK);
+    bootParameter &= (~(MMC_PARTITION_CONFIG_BOOT_ACK_MASK |
+                        MMC_PARTITION_CONFIG_PARTITION_ENABLE_MASK)) & 0xFFU;
     bootParameter |= ((config->enableBootAck ? 1U : 0U) << MMC_PARTITION_CONFIG_BOOT_ACK_SHIFT);
     bootParameter |= ((uint8_t)(config->bootPartition) << MMC_PARTITION_CONFIG_PARTITION_ENABLE_SHIFT);
 
@@ -2860,8 +2883,8 @@ status_t MMC_SetBootConfig(mmc_card_t *card, const mmc_boot_config_t *config)
 
     /*Set BOOT_BUS_CONDITIONS in Extended CSD */
     bootParameter = card->extendedCsd.bootDataBusConditions;
-    bootParameter &= (uint8_t) ~(MMC_BOOT_BUS_CONDITION_RESET_BUS_CONDITION_MASK |
-                                 MMC_BOOT_BUS_CONDITION_BUS_WIDTH_MASK | MMC_BOOT_BUS_CONDITION_BOOT_MODE_MASK);
+    bootParameter &= (~(MMC_BOOT_BUS_CONDITION_RESET_BUS_CONDITION_MASK |
+                         MMC_BOOT_BUS_CONDITION_BUS_WIDTH_MASK | MMC_BOOT_BUS_CONDITION_BOOT_MODE_MASK)) & 0xFFU;
     bootParameter |=
         (uint8_t)((config->retainBootbusCondition ? 1U : 0U) << MMC_BOOT_BUS_CONDITION_RESET_BUS_CONDITION_SHIFT);
     bootParameter |= bootBusWidth << MMC_BOOT_BUS_CONDITION_BUS_WIDTH_SHIFT;
@@ -2878,7 +2901,7 @@ status_t MMC_SetBootConfig(mmc_card_t *card, const mmc_boot_config_t *config)
 
     card->extendedCsd.bootDataBusConditions = bootParameter;
     /* check and configure the boot config write protect */
-    bootParameter = (uint8_t)config->pwrBootConfigProtection | (((uint8_t)config->premBootConfigProtection) << 4U);
+    bootParameter = ((config->pwrBootConfigProtection ? 1U : 0U) | ((config->premBootConfigProtection ? 1U : 0U) << 4U)) & 0xFFU;
     if (bootParameter != (card->extendedCsd.bootConfigProtect))
     {
         if (kStatus_Success != MMC_SetBootConfigWP(card, bootParameter))

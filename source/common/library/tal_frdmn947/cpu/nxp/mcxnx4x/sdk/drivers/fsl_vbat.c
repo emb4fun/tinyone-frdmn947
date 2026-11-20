@@ -1,6 +1,5 @@
 /*
- * Copyright 2022-2024 NXP
- * All rights reserved.
+ * Copyright 2022-2025 NXP
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -87,15 +86,28 @@ status_t VBAT_SetCrystalOsc32kModeAndLoadCapacitance(VBAT_Type *base,
     if ((xtalCap != kVBAT_Osc32kCrystalLoadCapBankDisabled) && (extalCap != kVBAT_Osc32kCrystalLoadCapBankDisabled))
     {
         base->OSCCTLA |= VBAT_OSCCTLA_CAP_SEL_EN_MASK;
+#if !(defined(FSL_FEATURE_MCX_VBAT_HAS_B_SIDE_REG) && (FSL_FEATURE_MCX_VBAT_HAS_B_SIDE_REG==0U))
         base->OSCCTLB &= ~VBAT_OSCCTLA_CAP_SEL_EN_MASK;
+#endif
         base->OSCCTLA = ((base->OSCCTLA & ~(VBAT_OSCCTLA_EXTAL_CAP_SEL_MASK | VBAT_OSCCTLA_XTAL_CAP_SEL_MASK)) |
                          (VBAT_OSCCTLA_XTAL_CAP_SEL(xtalCap) | VBAT_OSCCTLA_EXTAL_CAP_SEL(extalCap)));
+#if !(defined(FSL_FEATURE_MCX_VBAT_HAS_B_SIDE_REG) && (FSL_FEATURE_MCX_VBAT_HAS_B_SIDE_REG==0U))
         base->OSCCTLB = ((base->OSCCTLB & ~(VBAT_OSCCTLA_EXTAL_CAP_SEL_MASK | VBAT_OSCCTLA_XTAL_CAP_SEL_MASK)) |
                          VBAT_OSCCTLA_XTAL_CAP_SEL(~(uint32_t)xtalCap) | VBAT_OSCCTLA_EXTAL_CAP_SEL(~(uint32_t)extalCap));
+#endif
     }
 
+#if !(defined(FSL_FEATURE_MCX_VBAT_HAS_OSCCTLA_MODE_EN_BIT) && (FSL_FEATURE_MCX_VBAT_HAS_OSCCTLA_MODE_EN_BIT==0U))
     base->OSCCTLA = (((base->OSCCTLA & ~VBAT_OSCCTLA_MODE_EN_MASK)) | VBAT_OSCCTLA_MODE_EN(operateMode));
+#if !(defined(FSL_FEATURE_MCX_VBAT_HAS_B_SIDE_REG) && (FSL_FEATURE_MCX_VBAT_HAS_B_SIDE_REG==0U))
     base->OSCCTLB = ((base->OSCCTLB & ~VBAT_OSCCTLA_MODE_EN_MASK) | VBAT_OSCCTLA_MODE_EN(~(uint32_t)operateMode));
+#endif
+#else
+    /* No selectable oscillator operate mode on this device; the requested mode is validated
+     * above but there is no OSCCTLA[MODE_EN] field to write.
+     */
+    (void)operateMode;
+#endif /* FSL_FEATURE_MCX_VBAT_HAS_OSCCTLA_MODE_EN_BIT */
 
     return kStatus_Success;
 }
@@ -125,7 +137,9 @@ status_t VBAT_EnableBandgap(VBAT_Type *base, bool enable)
         if (VBAT_CheckFRO16kEnabled(base))
         {
             base->LDOCTLA |= VBAT_LDOCTLA_BG_EN_MASK;
+#if !(defined(FSL_FEATURE_MCX_VBAT_HAS_B_SIDE_REG) && (FSL_FEATURE_MCX_VBAT_HAS_B_SIDE_REG==0U))
             base->LDOCTLB &= ~VBAT_LDOCTLA_BG_EN_MASK;
+#endif
         }
         else
         {
@@ -136,7 +150,9 @@ status_t VBAT_EnableBandgap(VBAT_Type *base, bool enable)
     else
     {
         base->LDOCTLA &= ~VBAT_LDOCTLA_BG_EN_MASK;
+#if !(defined(FSL_FEATURE_MCX_VBAT_HAS_B_SIDE_REG) && (FSL_FEATURE_MCX_VBAT_HAS_B_SIDE_REG==0U))
         base->LDOCTLB |= VBAT_LDOCTLA_BG_EN_MASK;
+#endif
     }
 
     return status;
@@ -168,7 +184,9 @@ status_t VBAT_EnableBackupSRAMRegulator(VBAT_Type *base, bool enable)
             if (VBAT_CheckBandgapEnabled(base))
             {
                 base->LDOCTLA |= VBAT_LDOCTLA_LDO_EN_MASK;
+#if !(defined(FSL_FEATURE_MCX_VBAT_HAS_B_SIDE_REG) && (FSL_FEATURE_MCX_VBAT_HAS_B_SIDE_REG==0U))
                 base->LDOCTLB &= ~VBAT_LDOCTLA_LDO_EN_MASK;
+#endif
                 /* Polling until LDO is enabled. */
                 while ((base->STATUSA & VBAT_STATUSA_LDO_RDY_MASK) == 0UL)
                 {
@@ -189,7 +207,9 @@ status_t VBAT_EnableBackupSRAMRegulator(VBAT_Type *base, bool enable)
     else
     {
         base->LDOCTLA &= ~VBAT_LDOCTLA_LDO_EN_MASK;
+#if !(defined(FSL_FEATURE_MCX_VBAT_HAS_B_SIDE_REG) && (FSL_FEATURE_MCX_VBAT_HAS_B_SIDE_REG==0U))
         base->LDOCTLB |= VBAT_LDOCTLA_LDO_EN_MASK;
+#endif
     }
 
     return status;

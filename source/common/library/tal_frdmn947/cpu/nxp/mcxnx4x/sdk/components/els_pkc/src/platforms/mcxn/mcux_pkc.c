@@ -29,8 +29,6 @@
  */
 status_t PKC_PowerDownWakeupInit(PKC_Type *base)
 {
-    (void)base;
-
     /* set PKC RAM to interleave mode */
     SYSCON->RAM_INTERLEAVE = SYSCON_RAM_INTERLEAVE_INTERLEAVE_MASK;
 
@@ -59,8 +57,6 @@ status_t PKC_PowerDownWakeupInit(PKC_Type *base)
  */
 status_t PKC_InitNoZeroize(PKC_Type *base)
 {
-    (void)base;
-
     SYSCON->RAM_INTERLEAVE = SYSCON_RAM_INTERLEAVE_INTERLEAVE_MASK;
 
     /* Reset PKC */

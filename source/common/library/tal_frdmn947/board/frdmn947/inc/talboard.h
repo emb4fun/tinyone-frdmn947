@@ -69,6 +69,10 @@
 #define SYSTICK_PRIO       0
 #endif
 
+#ifndef CTIMER0_PRIO
+#define CTIMER0_PRIO       0
+#endif
+
 #ifndef LPUART0_PRIO
 #define LPUART0_PRIO       7
 #endif

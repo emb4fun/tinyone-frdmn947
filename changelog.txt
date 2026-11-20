@@ -2,12 +2,18 @@
 * Project: tinyone-frdmn947
 * Name   : "A small embedded DHCP and SNTP server"
 * Target : NXP FRDM-MCXN947
-* Version: 20260801
+* Version: 20261119
 ***************************************************************************
-* Tools  : SEGGER Embedded Studio 8.30
+* Tools  : SEGGER Embedded Studio 8.30c
 ***************************************************************************
 * URL    : https://www.emb4fun.de/projects/tone/index.html
 ***************************************************************************
+
+= Version 1.40 / 1.21, 19.11.2026
+   * Updated MbedTLS to v4.1.2.
+   * Updated lwIP to version from 2026-11-19.
+     (777e6d4, https://github.com/lwip-tcpip/lwip)
+   * SDK_26_09_00_FRDM-MCXN947
 
 = Version 1.31 / 1.21, 01.08.2026
    * Corrected missing FatFS patch.

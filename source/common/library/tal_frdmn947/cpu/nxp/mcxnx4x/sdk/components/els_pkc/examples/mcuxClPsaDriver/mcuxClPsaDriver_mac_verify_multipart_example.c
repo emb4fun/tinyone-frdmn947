@@ -1,0 +1,155 @@
+/*--------------------------------------------------------------------------*/
+/* Copyright 2022-2024 NXP                                                  */
+/*                                                                          */
+/* SPDX-License-Identifier: BSD-3-Clause                                    */
+/*                                                                          */
+/* Redistribution and use in source and binary forms, with or without       */
+/* modification, are permitted provided that the following conditions are   */
+/* met:                                                                     */
+/*                                                                          */
+/* 1. Redistributions of source code must retain the above copyright        */
+/*    notice, this list of conditions and the following disclaimer.         */
+/*                                                                          */
+/* 2. Redistributions in binary form must reproduce the above copyright     */
+/*    notice, this list of conditions and the following disclaimer in the   */
+/*    documentation and/or other materials provided with the distribution.  */
+/*                                                                          */
+/* 3. Neither the name of the copyright holder nor the names of its         */
+/*    contributors may be used to endorse or promote products derived from  */
+/*    this software without specific prior written permission.              */
+/*                                                                          */
+/* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS  */
+/* IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED    */
+/* TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A          */
+/* PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT       */
+/* HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,   */
+/* SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED */
+/* TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR   */
+/* PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF   */
+/* LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING     */
+/* NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS       */
+/* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.             */
+/*--------------------------------------------------------------------------*/
+
+#include "common.h"
+
+#include <mcuxClToolchain.h>
+#include <mcuxClEls.h> // Interface to the entire mcuxClEls component
+#include <mcuxClSession.h> // Interface to the entire mcuxClSession component
+#include <mcuxClKey.h> // Interface to the entire mcuxClKey component
+#include <mcuxClMac.h>
+#include <mcuxClMacModes.h>
+#include <mcuxCsslFlowProtection.h>
+#include <mcuxClCore_FunctionIdentifiers.h> // Code flow protection
+#include <mcuxClCore_Examples.h>
+#include <mcuxClExample_ELS_Helper.h>
+#include <mcuxClToolchain.h> // memory segment definitions
+#include <stdbool.h>  // bool type for the example's return code
+#include <mcuxClPsaDriver.h>
+#include <mcuxClAes.h> // Interface to AES-related definitions and types
+
+#define LIFETIME_INTERNAL PSA_KEY_LIFETIME_FROM_PERSISTENCE_AND_LOCATION(PSA_KEY_LIFETIME_VOLATILE, PSA_KEY_LOCATION_EXTERNAL_STORAGE)
+#define LIFETIME_EXTERNAL PSA_KEY_LIFETIME_FROM_PERSISTENCE_AND_LOCATION(PSA_KEY_LIFETIME_VOLATILE, PSA_KEY_LOCATION_LOCAL_STORAGE)
+
+MCUXCLEXAMPLE_FUNCTION(mcuxClPsaDriver_mac_verify_multipart_example)
+{
+	/* Example AES-128 key. */
+    const ALIGNED uint8_t aes128_key[MCUXCLAES_AES128_KEY_SIZE] = {
+                                        0x7c, 0x0b, 0x7d, 0xb9,
+                                        0x81, 0x1f, 0x10, 0xd0,
+                                        0x0e, 0x47, 0x6c, 0x7a,
+                                        0x0d, 0x92, 0xf6, 0xe0
+    };
+
+    /* Example input size. */
+    const size_t cmac_input_size_16_1 = 20u;
+    const size_t cmac_input_size_16_2 = 12u;
+
+    /* Example input to the CMAC function. */
+    const ALIGNED uint8_t cmac_input16_in1[] = {
+                                        0x1e, 0xe0, 0xec, 0x46,
+                                        0x6d, 0x46, 0xfd, 0x84,
+                                        0x9b, 0x40, 0xc0, 0x66,
+                                        0xb4, 0xfb, 0xbd, 0x22,
+                                        0xa2, 0x0a, 0x4d, 0x80,
+    };
+    const ALIGNED uint8_t cmac_input16_in2[] = {
+                                        0xa0, 0x08, 0xac, 0x9a,
+                                        0xf1, 0x7e, 0x4f, 0xdf,
+                                        0xd1, 0x06, 0x78, 0x5e
+    };
+
+    /* Example reference CMAC. */
+    const ALIGNED uint8_t cmac_output_reference16[MCUXCLELS_CMAC_OUT_SIZE] = {
+                                        0xba, 0xec, 0xdc, 0x91,
+                                        0xe9, 0xa1, 0xfc, 0x35,
+                                        0x72, 0xad, 0xf1, 0xe4,
+                                        0x23, 0x2a, 0xe2, 0x85
+    };
+
+    /** Initialize ELS, Enable the ELS **/
+    if(!mcuxClExample_Els_Init(MCUXCLELS_RESET_DO_NOT_CANCEL))
+    {
+        return MCUXCLEXAMPLE_STATUS_ERROR;
+    }
+
+    struct psa_mac_operation_s operation = psa_mac_operation_init();
+
+	/* Set up PSA key attributes. */
+    psa_key_attributes_t attributes = PSA_KEY_ATTRIBUTES_INIT;
+    psa_set_key_type( &attributes, PSA_KEY_TYPE_AES );
+    psa_set_key_usage_flags( &attributes, PSA_KEY_USAGE_SIGN_HASH );
+
+	/* Call the sign setup operation */
+    psa_status_t result =  psa_driver_wrapper_mac_sign_setup(
+        &operation,                          //psa_mac_operation_t *operation,
+        &attributes,                         //const psa_key_attributes_t *attributes,
+        aes128_key,                          //const uint8_t *key_buffer,
+        MCUXCLELS_CIPHER_KEY_SIZE_AES_128,    //size_t key_buffer_size,
+        PSA_ALG_CMAC                         //psa_algorithm_t alg
+    );
+
+	/* Check the return value */
+	if(result != PSA_SUCCESS) {
+		return MCUXCLEXAMPLE_STATUS_ERROR;
+	}
+
+    result = psa_driver_wrapper_mac_update(
+        &operation,            // psa_mac_operation_t *operation,
+        cmac_input16_in1,      // const uint8_t *input,
+        cmac_input_size_16_1   // size_t input_length
+    );
+
+    if(result != PSA_SUCCESS) {
+	    return MCUXCLEXAMPLE_STATUS_ERROR;
+	}
+
+    result = psa_driver_wrapper_mac_update(
+        &operation,            // psa_mac_operation_t *operation,
+        cmac_input16_in2,      // const uint8_t *input,
+        cmac_input_size_16_2   // size_t input_length
+    );
+
+    if(result != PSA_SUCCESS) {
+	    return MCUXCLEXAMPLE_STATUS_ERROR;
+	}
+
+    result = psa_driver_wrapper_mac_verify_finish(
+        &operation,                     // psa_mac_operation_t *operation,
+        cmac_output_reference16,        // uint8_t *mac,
+        7                               // size_t mac_length, for testing purpose, some truncated value
+    );
+    /* Success means verified! */
+    if(result != PSA_SUCCESS) {
+	    return MCUXCLEXAMPLE_STATUS_ERROR;
+	}
+
+    /* Disable the ELS */
+    if(!mcuxClExample_Els_Disable())
+    {
+        return MCUXCLEXAMPLE_STATUS_ERROR;
+    }
+
+	/* Return */
+	return MCUXCLEXAMPLE_STATUS_OK;
+}

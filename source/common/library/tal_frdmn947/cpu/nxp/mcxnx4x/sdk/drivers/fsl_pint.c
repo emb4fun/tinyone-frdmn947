@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016, Freescale Semiconductor, Inc.
- * Copyright 2016-2023, 2025 NXP
+ * Copyright 2016-2023, 2025-2026 NXP
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -78,7 +78,7 @@ static uint32_t PINT_GetInstance(PINT_Type *base)
     uint32_t instance;
     for (instance = 0; instance < ARRAY_SIZE(s_pintBases); ++instance)
     {
-        if (MSDK_REG_SECURE_ADDR(s_pintBases[instance]) == MSDK_REG_SECURE_ADDR(base))
+        if (MSDK_REG_NONSECURE_ADDR(s_pintBases[instance]) == MSDK_REG_NONSECURE_ADDR(base))
         {
             break;
         }
@@ -760,6 +760,79 @@ void PINT_DisableCallbackByIndex(PINT_Type *base, pint_pin_int_t pintIdx)
 }
 
 /*!
+ * brief enable interrupt in NVIC by pin index.
+
+ * This function enables the interrupt in the NVIC. The difference with
+ * PINT_EnableCallbackByIndex() is that PINT_EnableCallbackByIndex() not
+ * only enables the interrupt in the NVIC but also clears pending interrupts.
+ * Use this function together with PINT_DisableInterruptByIndex() to
+ * temporarily disable/enable the pin interrupt.
+ * Use PINT_EnableCallbackByIndex() to enable the interrupt after installing
+ * the callback.
+ *
+ * param base Base address of the peripheral.
+ * param pinIdx pin index.
+ *
+ * retval None.
+ */
+void PINT_EnableInterruptByIndex(PINT_Type *base, pint_pin_int_t pintIdx)
+{
+    assert(base != NULL);
+
+#if (defined(FSL_FEATURE_SECPINT_NUMBER_OF_CONNECTED_OUTPUTS) && FSL_FEATURE_SECPINT_NUMBER_OF_CONNECTED_OUTPUTS)
+    /* Get the right security pint irq index in array */
+    if ((base == SECPINT) && ((uint32_t)pintIdx < (uint32_t)FSL_FEATURE_SECPINT_NUMBER_OF_CONNECTED_OUTPUTS))
+    {
+        pintIdx =
+            (pint_pin_int_t)(uint32_t)((uint32_t)pintIdx + (uint32_t)FSL_FEATURE_PINT_NUMBER_OF_CONNECTED_OUTPUTS);
+    }
+#endif /* FSL_FEATURE_SECPINT_NUMBER_OF_CONNECTED_OUTPUTS */
+
+#if defined(FSL_FEATURE_PINT_INTERRUPT_COMBINE) && (FSL_FEATURE_PINT_INTERRUPT_COMBINE == 1)
+    (void)EnableIRQ(s_pintIRQ[0]);
+#else
+    (void)EnableIRQ(s_pintIRQ[pintIdx]);
+#endif
+}
+
+/*!
+ * brief disable interrupt in NVIC by pin index.
+
+ * This function disables the interrupt in the NVIC. The difference with
+ * PINT_DisableCallbackByIndex() is that PINT_DisableCallbackByIndex() not
+ * only disables the interrupt in the NVIC but also clears pending interrupts.
+ * Use this function together with PINT_EnableInterruptByIndex() to
+ * temporarily disable/enable the pin interrupt.
+ * Use PINT_DisableCallbackByIndex() to disable the interrupt in a de-init function.
+ *
+ * param base Base address of the peripheral.
+ * param pinIdx pin index.
+ *
+ * retval None.
+ */
+void PINT_DisableInterruptByIndex(PINT_Type *base, pint_pin_int_t pintIdx)
+{
+    uint32_t instance = PINT_GetInstance(base);
+
+    assert(base != NULL);
+
+    if (instance < FSL_FEATURE_PINT_NUMBER_OF_INSTANCE)
+    {
+#if defined(FSL_FEATURE_PINT_INTERRUPT_COMBINE) && (FSL_FEATURE_PINT_INTERRUPT_COMBINE == 1)
+        (void)DisableIRQ(s_pintIRQ[0]);
+#else
+        (void)DisableIRQ(s_pintIRQ[pintIdx]);
+#endif
+    }
+    else
+    {
+#if (defined(FSL_FEATURE_SECPINT_NUMBER_OF_CONNECTED_OUTPUTS) && FSL_FEATURE_SECPINT_NUMBER_OF_CONNECTED_OUTPUTS)
+        (void)DisableIRQ(s_pintIRQ[(uint32_t)pintIdx + (uint32_t)FSL_FEATURE_PINT_NUMBER_OF_CONNECTED_OUTPUTS]);
+#endif
+    }
+}
+
+/*!
  * brief	Deinitialize PINT peripheral.
 
  * This function disables the PINT clock.
@@ -886,6 +959,23 @@ static void PINT_CommonIRQHanlder(uint32_t instance, pint_pin_int_t pintr)
         s_pintCallback[instance](pintr, &pintStatus);
     }
 #endif
+}
+
+void PINT_DriverIRQHandler(uint32_t instance)
+{
+    if (instance < ARRAY_SIZE(s_pintBases))
+    {
+        uint32_t flags = (s_pintBases[instance]->IST & PINT_IST_PSTAT_MASK) |
+                         PINT_PatternMatchGetStatusAll(s_pintBases[instance]);
+        for (uint8_t i = 0U; i < (uint8_t)FSL_FEATURE_PINT_NUMBER_OF_CONNECTED_OUTPUTS; i++)
+        {
+            if ((flags & (1UL << i)) != 0UL)
+            {
+                PINT_CommonIRQHanlder(instance, (pint_pin_int_t)i);
+            }
+        }
+    }
+    SDK_ISR_EXIT_BARRIER;
 }
 
 #if (defined(FSL_FEATURE_SECPINT_NUMBER_OF_CONNECTED_OUTPUTS) && FSL_FEATURE_SECPINT_NUMBER_OF_CONNECTED_OUTPUTS)

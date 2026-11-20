@@ -1,6 +1,5 @@
 /*
- * Copyright 2022-2024 NXP
- * All rights reserved.
+ * Copyright 2022-2025 NXP
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -22,12 +21,24 @@
 /*! @name Driver version */
 /*! @{ */
 /*! @brief eDMA driver version */
-#define FSL_EDMA_DRIVER_VERSION (MAKE_VERSION(2, 10, 5)) /*!< Version 2.10.5. */
+#define FSL_EDMA_DRIVER_VERSION (MAKE_VERSION(2, 10, 14)) /*!< Version 2.10.14. */
 /*! @} */
 
-/*! @brief eDMA driver name */
+/*! @brief eDMA driver name.
+ *
+ * This is the unified eDMA driver serving the eDMA3, eDMA4 and eDMA5 IP versions.
+ * Its Kconfig component is @c driver.edma_unified; the historical @c driver.edma4
+ * component and the @c FSL_EDMA_DRIVER_EDMA4 macro are retained as deprecated
+ * aliases for backward compatibility. The version-specific @c edma4_* / @c edma5_*
+ * identifiers inside this driver refer to the corresponding IP TCD layout, not to
+ * the component name.
+ */
+#ifndef FSL_EDMA_DRIVER_UNIFIED
+#define FSL_EDMA_DRIVER_UNIFIED (1)
+#endif
+/*! @brief Deprecated alias of FSL_EDMA_DRIVER_UNIFIED; use FSL_EDMA_DRIVER_UNIFIED. */
 #ifndef FSL_EDMA_DRIVER_EDMA4
-#define FSL_EDMA_DRIVER_EDMA4 (1)
+#define FSL_EDMA_DRIVER_EDMA4 FSL_EDMA_DRIVER_UNIFIED
 #endif
 
 /*!@brief Macro used for allocate edma TCD */
@@ -304,7 +315,7 @@ typedef struct _edma_channel_config
  */
 typedef edma_core_tcd_t edma_tcd_t;
 
-/*! @brief edma4 channel transfer configuration
+/*! @brief eDMA channel transfer configuration
  *
  * The transfer configuration structure support full feature configuration of the transfer control descriptor.
  *
@@ -317,7 +328,7 @@ typedef edma_core_tcd_t edma_tcd_t;
  *       5. the dstAddr should align with the dstWidthOfEachTransfer
  *       6. the srcAddr should align with srcAddrModulo if modulo feature is enabled
  *       7. the dstAddr should align with dstAddrModulo if modulo feature is enabled
- *       If anyone of above condition can not be satisfied, the edma4 interfaces will generate assert error.
+ *       If anyone of above condition can not be satisfied, the eDMA interfaces will generate assert error.
  *
  * 1.To perform a simple transfer, below members should be initialized at least
  * .srcAddr - source address
@@ -1021,7 +1032,7 @@ static inline void EDMA_EnableAutoStopRequest(EDMA_Type *base, uint32_t channel,
     }
     else
     {
-        EDMA_TCD_CSR(EDMA_TCD_BASE(base, channel), EDMA_TCD_TYPE(base)) &= ~(uint16_t)DMA_CSR_DREQ_MASK;
+        EDMA_TCD_CSR(EDMA_TCD_BASE(base, channel), EDMA_TCD_TYPE(base)) &= MCUX_MASK_INVERT_16(DMA_CSR_DREQ_MASK);
     }
 }
 
@@ -1180,7 +1191,7 @@ static inline void EDMA_TcdSetBandWidth(edma_tcd_t *tcd, edma_bandwidth_t bandWi
     assert(tcd != NULL);
 
     EDMA_TCD_CSR(tcd, kEDMA_EDMA4Flag) =
-        (uint16_t)((EDMA_TCD_CSR(tcd, kEDMA_EDMA4Flag) & (~DMA_CSR_BWC_MASK)) | DMA_CSR_BWC(bandWidth));
+        (uint16_t)(((EDMA_TCD_CSR(tcd, kEDMA_EDMA4Flag) & MCUX_MASK_INVERT_16(DMA_CSR_BWC_MASK)) | DMA_CSR_BWC(bandWidth)));
 }
 #endif
 
@@ -1215,8 +1226,8 @@ static inline void EDMA_TcdEnableAutoStopRequest(edma_tcd_t *tcd, bool enable)
 {
     assert(tcd != NULL);
 
-    EDMA_TCD_CSR(tcd, kEDMA_EDMA4Flag) = (uint16_t)((EDMA_TCD_CSR(tcd, kEDMA_EDMA4Flag) & (~DMA_CSR_DREQ_MASK)) |
-                                                    DMA_CSR_DREQ((true == enable ? 1U : 0U)));
+    EDMA_TCD_CSR(tcd, kEDMA_EDMA4Flag) = (uint16_t)(((EDMA_TCD_CSR(tcd, kEDMA_EDMA4Flag) & MCUX_MASK_INVERT_16(DMA_CSR_DREQ_MASK)) |
+                                                    DMA_CSR_DREQ((true == enable ? 1U : 0U))));
 }
 
 /*!
@@ -1367,7 +1378,7 @@ static inline void EDMA_TcdSetBandWidthExt(EDMA_Type *base, edma_tcd_t *tcd, edm
     assert(((uint32_t)tcd & 0x1FU) == 0U);
 
     EDMA_TCD_CSR(tcd, EDMA_TCD_TYPE(base)) =
-        (uint16_t)((EDMA_TCD_CSR(tcd, EDMA_TCD_TYPE(base)) & (~DMA_CSR_BWC_MASK)) | DMA_CSR_BWC(bandWidth));
+        (uint16_t)(((EDMA_TCD_CSR(tcd, EDMA_TCD_TYPE(base)) & MCUX_MASK_INVERT_16(DMA_CSR_BWC_MASK)) | DMA_CSR_BWC(bandWidth)));
 }
 #endif
 
@@ -1399,8 +1410,8 @@ static inline void EDMA_TcdEnableAutoStopRequestExt(EDMA_Type *base, edma_tcd_t 
     assert(tcd != NULL);
     assert(((uint32_t)tcd & 0x1FU) == 0U);
 
-    EDMA_TCD_CSR(tcd, EDMA_TCD_TYPE(base)) = (uint16_t)((EDMA_TCD_CSR(tcd, EDMA_TCD_TYPE(base)) & (~DMA_CSR_DREQ_MASK)) |
-                                                       DMA_CSR_DREQ((true == enable ? 1U : 0U)));
+    EDMA_TCD_CSR(tcd, EDMA_TCD_TYPE(base)) = (uint16_t)(((EDMA_TCD_CSR(tcd, EDMA_TCD_TYPE(base)) & MCUX_MASK_INVERT_16(DMA_CSR_DREQ_MASK)) |
+                                                       DMA_CSR_DREQ((true == enable ? 1U : 0U))));
 }
 
 /*!
@@ -1578,8 +1589,11 @@ void EDMA_ClearChannelStatusFlags(EDMA_Type *base, uint32_t channel, uint32_t ma
  *               parameters.
  * @param base eDMA peripheral base address.
  * @param channel eDMA channel number.
+ *
+ * @retval #kStatus_Success
+ * @retval #kStatus_InvalidArgument
  */
-void EDMA_CreateHandle(edma_handle_t *handle, EDMA_Type *base, uint32_t channel);
+status_t EDMA_CreateHandle(edma_handle_t *handle, EDMA_Type *base, uint32_t channel);
 
 /*!
  * @brief Installs the TCDs memory pool into the eDMA handle.
@@ -1836,7 +1850,9 @@ static inline uint32_t EDMA_GetUnusedTCDNumber(edma_handle_t *handle)
 {
     int8_t tmpTcdSize = handle->tcdSize;
     int8_t tmpTcdUsed = handle->tcdUsed;
-    return ((uint32_t)tmpTcdSize - (uint32_t)tmpTcdUsed);
+    assert(tmpTcdUsed >= 0);
+    assert(tmpTcdSize >= tmpTcdUsed);
+    return ((uint32_t)(uint8_t)tmpTcdSize - (uint32_t)(uint8_t)tmpTcdUsed);
 }
 
 /*!
@@ -1881,6 +1897,16 @@ static inline uint32_t EDMA_GetNextTCDAddress(edma_handle_t *handle)
  * @param handle eDMA handle pointer.
  */
 void EDMA_HandleIRQ(edma_handle_t *handle);
+
+/*!
+ * @brief Initialize all fields to 0 for the TCD structure.
+ *
+ * This function initialize all fields for this TCD structure to 0.
+ *
+ * @param base eDMA peripheral base address.
+ * @param tcd Pointer to the TCD structure.
+ */
+void EDMA_TcdInit(EDMA_Type *base, edma_tcd_t *tcdRegs);
 
 /*! @} */
 

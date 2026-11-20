@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016, Freescale Semiconductor, Inc.
- * Copyright 2016-2020 NXP
+ * Copyright 2016-2020, 2025 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -39,7 +39,7 @@ static const clock_ip_name_t s_wwdtClocks[] = WWDT_CLOCKS;
 #endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
 
 #if !(defined(FSL_SDK_DISABLE_DRIVER_RESET_CONTROL) && FSL_SDK_DISABLE_DRIVER_RESET_CONTROL)
-#if !(defined(FSL_FEATURE_WWDT_HAS_NO_RESET) && FSL_FEATURE_WWDT_HAS_NO_RESET)
+#if defined(WWDT_RSTS)
 /*! @brief Pointers to WWDT resets for each instance. */
 static const reset_ip_name_t s_wwdtResets[] = WWDT_RSTS;
 #endif
@@ -56,7 +56,7 @@ static uint32_t WWDT_GetInstance(WWDT_Type *base)
     /* Find the instance index from base address mappings. */
     for (instance = 0; instance < wwdtArrayCount; instance++)
     {
-        if (MSDK_REG_SECURE_ADDR(s_wwdtBases[instance]) == MSDK_REG_SECURE_ADDR(base))
+        if (MSDK_REG_NONSECURE_ADDR(s_wwdtBases[instance]) == MSDK_REG_NONSECURE_ADDR(base))
         {
             break;
         }
@@ -146,7 +146,7 @@ void WWDT_Init(WWDT_Type *base, const wwdt_config_t *config)
 #endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
 
 #if !(defined(FSL_SDK_DISABLE_DRIVER_RESET_CONTROL) && FSL_SDK_DISABLE_DRIVER_RESET_CONTROL)
-#if !(defined(FSL_FEATURE_WWDT_HAS_NO_RESET) && FSL_FEATURE_WWDT_HAS_NO_RESET)
+#if defined(WWDT_RSTS)
     /* Reset the module. */
     RESET_PeripheralReset(s_wwdtResets[WWDT_GetInstance(base)]);
 #endif
@@ -161,10 +161,12 @@ void WWDT_Init(WWDT_Type *base, const wwdt_config_t *config)
 #endif /* FSL_SDK_DISABLE_DRIVER_RESET_CONTROL */
 
 #if !(defined(FSL_FEATURE_WWDT_HAS_NO_OSCILLATOR_LOCK) && FSL_FEATURE_WWDT_HAS_NO_OSCILLATOR_LOCK)
-    value = WWDT_MOD_WDEN(config->enableWwdt) | WWDT_MOD_WDRESET(config->enableWatchdogReset) |
-            WWDT_MOD_LOCK(config->enableLockOscillator);
+    value = WWDT_MOD_WDEN(config->enableWwdt ? 1U : 0U) |
+            WWDT_MOD_WDRESET(config->enableWatchdogReset ? 1U : 0U) |
+            WWDT_MOD_LOCK(config->enableLockOscillator ? 1U : 0U);
 #else
-    value = WWDT_MOD_WDEN(config->enableWwdt) | WWDT_MOD_WDRESET(config->enableWatchdogReset);
+    value = WWDT_MOD_WDEN(config->enableWwdt ? 1U : 0U) |
+            WWDT_MOD_WDRESET(config->enableWatchdogReset ? 1U : 0U);
 #endif
     /* Clear legacy flag in the MOD register by software writing a "1" to this bit field.. */
     if (0U != (base->MOD & WWDT_MOD_WDINT_MASK))

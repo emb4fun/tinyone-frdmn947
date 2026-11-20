@@ -1,5 +1,5 @@
 /*
- * Copyright 2022-2025 NXP
+ * Copyright 2022-2025, 2026 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -26,6 +26,21 @@ enum _lpspi_default_watermarks
     kLpspiDefaultTxWatermark = 0,
     kLpspiDefaultRxWatermark = 0,
 };
+
+/*
+ * <! Structure definition for variables that passed as parameters in LPSPI_MasterTransferBlocking.
+ *  The structure is private.
+ */
+typedef struct _lpspi_transfer_blocking_param
+{
+    bool isTxMask;
+    bool isPcsContinuous;
+    uint8_t bytesEachWrite;
+    uint8_t bytesEachRead;
+    const uint8_t *txData;
+    uint8_t *rxData;
+    uint32_t rxRemainingByteCount;
+} lpspi_transfer_blocking_param_t;
 
 /*! @brief Typedef for master interrupt handler. */
 typedef void (*lpspi_master_isr_t)(uint32_t instance, lpspi_master_handle_t *handle);
@@ -109,12 +124,23 @@ static void LPSPI_SlaveTransferFillUpTxFifo(LPSPI_Type *base, lpspi_slave_handle
  */
 static void LPSPI_SlaveTransferComplete(LPSPI_Type *base, lpspi_slave_handle_t *handle);
 
+/*!
+ * @brief introduce function static bool LPSPI_MasterTransferWriteAllTxData.
+ * This function was deal with write all Txdata.
+ *
+ * @param base LPSPI peripheral address.
+ * @param stateParams Pass the address of the parent function variable.
+ *
+ * @return default is true when No abnormality.
+ * @return false when time out.
+ */
+static bool LPSPI_MasterTransferWriteAllTxData(LPSPI_Type *base,
+                                               lpspi_transfer_t *transfer,
+                                               lpspi_transfer_blocking_param_t *stateParams);
+
 /*******************************************************************************
  * Variables
  ******************************************************************************/
-
-/* Defines constant value arrays for the baud rate pre-scalar and scalar divider values.*/
-static const uint8_t s_baudratePrescaler[] = {1, 2, 4, 8, 16, 32, 64, 128};
 
 /*! @brief Pointers to lpspi bases for each instance. */
 static LPSPI_Type *const s_lpspiBases[] = LPSPI_BASE_PTRS;
@@ -160,7 +186,7 @@ uint32_t LPSPI_GetInstance(LPSPI_Type *base)
     /* Find the instance index from base address mappings. */
     for (instance = 0; instance < ARRAY_SIZE(s_lpspiBases); instance++)
     {
-        if (MSDK_REG_SECURE_ADDR(s_lpspiBases[instance]) == MSDK_REG_SECURE_ADDR(base))
+        if (MSDK_REG_NONSECURE_ADDR(s_lpspiBases[instance]) == MSDK_REG_NONSECURE_ADDR(base))
         {
             break;
         }
@@ -239,7 +265,7 @@ void LPSPI_MasterInit(LPSPI_Type *base, const lpspi_master_config_t *masterConfi
     base->CFGR1 = (base->CFGR1 & ~(LPSPI_CFGR1_OUTCFG_MASK | LPSPI_CFGR1_PINCFG_MASK | LPSPI_CFGR1_NOSTALL_MASK |
                                    LPSPI_CFGR1_SAMPLE_MASK | LPSPI_CFGR1_PCSCFG_MASK )) |
                   LPSPI_CFGR1_OUTCFG(masterConfig->dataOutConfig) | LPSPI_CFGR1_PINCFG(masterConfig->pinCfg) |
-                  LPSPI_CFGR1_NOSTALL(0) | LPSPI_CFGR1_SAMPLE((uint32_t)masterConfig->enableInputDelay )|
+                  LPSPI_CFGR1_NOSTALL(0) | LPSPI_CFGR1_SAMPLE(masterConfig->enableInputDelay ? 1U : 0U) |
                   LPSPI_CFGR1_PCSCFG(masterConfig->pcsFunc);
 
     /* Set baudrate and delay times*/
@@ -253,12 +279,12 @@ void LPSPI_MasterInit(LPSPI_Type *base, const lpspi_master_config_t *masterConfi
                 LPSPI_TCR_LSBF(masterConfig->direction) | LPSPI_TCR_FRAMESZ(masterConfig->bitsPerFrame - 1U) |
                 LPSPI_TCR_PRESCALE(tcrPrescaleValue) | LPSPI_TCR_PCS(masterConfig->whichPcs);
 
-    LPSPI_Enable(base, true);
-
     (void)LPSPI_MasterSetDelayTimes(base, masterConfig->pcsToSckDelayInNanoSec, kLPSPI_PcsToSck, srcClock_Hz);
     (void)LPSPI_MasterSetDelayTimes(base, masterConfig->lastSckToPcsDelayInNanoSec, kLPSPI_LastSckToPcs, srcClock_Hz);
     (void)LPSPI_MasterSetDelayTimes(base, masterConfig->betweenTransferDelayInNanoSec, kLPSPI_BetweenTransfer,
                                     srcClock_Hz);
+
+    LPSPI_Enable(base, true);
 
     LPSPI_SetDummyData(base, LPSPI_DUMMY_DATA);
 }
@@ -521,7 +547,8 @@ uint32_t LPSPI_MasterSetBaudRate(LPSPI_Type *base,
             {
                 break;
             }
-            realBaudrate = (srcClock_Hz / (s_baudratePrescaler[prescaler] * (scaler + 2U)));
+
+            realBaudrate = (srcClock_Hz / ((1U << prescaler) * (scaler + 2U)));
 
             /* calculate the baud rate difference based on the conditional statement
              * that states that the calculated baud rate must not exceed the desired baud rate
@@ -631,141 +658,63 @@ void LPSPI_MasterSetDelayScaler(LPSPI_Type *base, uint32_t scaler, lpspi_delay_t
 }
 
 /*!
- * brief Calculates the delay based on the desired delay input in nanoseconds (module must be
+ * @brief Calculates the delay based on the desired delay input in nanoseconds (module must be
  *        disabled to change the delay values).
  *
- * This function calculates the values for the following:
- * SCK to PCS delay, or
- * PCS to SCK delay, or
- * The configurations must occur between the transfer delay.
- *
+ * This function configures the SCK to PCS delay, PCS to SCK delay, or the delay between transfers.
  * The delay names are available in type lpspi_delay_type_t.
  *
- * The user passes the desired delay and the desired delay value in
- * nano-seconds.  The function calculates the value needed for the desired delay parameter
- * and returns the actual calculated delay because an exact delay match may not be possible. In this
- * case, the closest match is calculated without going below the desired delay value input.
- * It is possible to input a very large delay value that exceeds the capability of the part, in
- * which case the maximum supported delay is returned. It is up to the higher level
- * peripheral driver to alert the user of an out of range delay input.
+ * The function calculates the value needed for the desired delay parameter and returns the actual
+ * calculated delay. An exact delay match may not be possible, in which case the closest match is
+ * calculated without going below the desired delay value. If the input exceeds the maximum capability,
+ * the maximum supported delay is returned.
  *
- * Note that the LPSPI module must be configured for master mode before configuring this. And note that
- * the delayTime = LPSPI_clockSource / (PRESCALE * Delay_scaler).
+ * Note that the LPSPI module must first be disabled before configuring this.
+ * Note that the LPSPI module must be configured for master mode before configuring this.
  *
- * param base LPSPI peripheral address.
- * param delayTimeInNanoSec The desired delay value in nano-seconds.
- * param whichDelay The desired delay to configuration, which must be of type lpspi_delay_type_t.
- * param srcClock_Hz  Module source input clock in Hertz.
- * return actual Calculated delay value in nano-seconds.
+ * @param base LPSPI peripheral address.
+ * @param delayTimeInNanoSec The desired delay value in nanoseconds.
+ * @param whichDelay The desired delay to configure, must be of type lpspi_delay_type_t.
+ * @param srcClock_Hz Module source input clock in Hertz.
+ * @return Actual calculated delay value in nanoseconds.
  */
 uint32_t LPSPI_MasterSetDelayTimes(LPSPI_Type *base,
                                    uint32_t delayTimeInNanoSec,
                                    lpspi_delay_type_t whichDelay,
                                    uint32_t srcClock_Hz)
 {
-    uint64_t realDelay, bestDelay;
-    uint32_t scaler, bestScaler;
-    uint32_t diff, min_diff;
-    uint64_t initialDelayNanoSec;
-    uint32_t clockDividedPrescaler;
+    uint32_t tcrPrescale = (LPSPI_GetTcr(base) & LPSPI_TCR_PRESCALE_MASK) >> LPSPI_TCR_PRESCALE_SHIFT;
+    uint32_t clockDividedPrescaler = srcClock_Hz >> tcrPrescale;
 
-    /* For delay between transfer, an additional scaler value is needed */
-    uint32_t additionalScaler = 0;
+    uint64_t scaler = (uint64_t)delayTimeInNanoSec * (uint64_t)clockDividedPrescaler;
 
-    /*As the RM note, the LPSPI baud rate clock is itself divided by the PRESCALE setting, which can vary between
-     * transfers.*/
-    clockDividedPrescaler =
-        srcClock_Hz / s_baudratePrescaler[(LPSPI_GetTcr(base) & LPSPI_TCR_PRESCALE_MASK) >> LPSPI_TCR_PRESCALE_SHIFT];
+    assert(scaler <= (UINT64_MAX - (1000000000U - 1U)));
+    /* Ensure the scaler value will be round up */
+    scaler += (1000000000U - 1U);
+    scaler /= 1000000000U;
 
-    /* Find combination of prescaler and scaler resulting in the delay closest to the requested value.*/
-    min_diff = 0xFFFFFFFFU;
-
-    /* Initialize scaler to max value to generate the max delay */
-    bestScaler = 0xFFU;
-
-    /* Calculate the initial (min) delay and maximum possible delay based on the specific delay as
-     * the delay divisors are slightly different based on which delay we are configuring.
-     */
-    if (whichDelay == kLPSPI_BetweenTransfer)
+    if (scaler > 1U)
     {
-        /* First calculate the initial, default delay, note min delay is 2 clock cycles. Due to large size of
-         calculated values (uint64_t), we need to break up the calculation into several steps to ensure
-         accurate calculated results
-         */
-        initialDelayNanoSec = 1000000000U;
-        initialDelayNanoSec *= 2U;
-        initialDelayNanoSec /= clockDividedPrescaler;
+        scaler -= 1U;
 
-        /* Calculate the maximum delay */
-        bestDelay = 1000000000U;
-        bestDelay *= 257U; /* based on DBT+2, or 255 + 2 */
-        bestDelay /= clockDividedPrescaler;
-
-        additionalScaler = 1U;
+        if (scaler > (uint64_t)UINT8_MAX)
+        {
+            scaler = (uint64_t)UINT8_MAX;
+        }
     }
     else
     {
-        /* First calculate the initial, default delay, min delay is 1 clock cycle. Due to large size of calculated
-        values (uint64_t), we need to break up the calculation into several steps to ensure accurate calculated
-        results.
-        */
-        initialDelayNanoSec = 1000000000U;
-        initialDelayNanoSec /= clockDividedPrescaler;
-
-        /* Calculate the maximum delay */
-        bestDelay = 1000000000U;
-        bestDelay *= 256U; /* based on SCKPCS+1 or PCSSCK+1, or 255 + 1 */
-        bestDelay /= clockDividedPrescaler;
-
-        additionalScaler = 0U;
+        scaler = 0U;
     }
 
-    /* If the initial, default delay is already greater than the desired delay, then
-     * set the delay to their initial value (0) and return the delay. In other words,
-     * there is no way to decrease the delay value further.
-     */
-    if (initialDelayNanoSec >= delayTimeInNanoSec)
-    {
-        LPSPI_MasterSetDelayScaler(base, 0, whichDelay);
-        return (uint32_t)initialDelayNanoSec;
-    }
+    uint64_t realDelay = 1000000000U;
+    realDelay *= (scaler + 1U);
+    realDelay /= clockDividedPrescaler;
 
-    /* If min_diff = 0, the exit for loop */
-    for (scaler = 0U; scaler < 256U; scaler++)
-    {
-        if (min_diff == 0U)
-        {
-            break;
-        }
-        /* Calculate the real delay value as we cycle through the scaler values.
-        Due to large size of calculated values (uint64_t), we need to break up the
-        calculation into several steps to ensure accurate calculated results
-        */
-        realDelay = 1000000000U;
-        realDelay *= ((uint64_t)scaler + 1UL + (uint64_t)additionalScaler);
-        realDelay /= clockDividedPrescaler;
+    LPSPI_MasterSetDelayScaler(base, (uint32_t)scaler, whichDelay);
 
-        /* calculate the delay difference based on the conditional statement
-         * that states that the calculated delay must not be less then the desired delay
-         */
-        if (realDelay >= delayTimeInNanoSec)
-        {
-            diff = (uint32_t)(realDelay - (uint64_t)delayTimeInNanoSec);
-            if (min_diff > diff)
-            {
-                /* a better match found */
-                min_diff   = diff;
-                bestScaler = scaler;
-                bestDelay  = realDelay;
-            }
-        }
-    }
-
-    /* write the best scaler value for the delay */
-    LPSPI_MasterSetDelayScaler(base, bestScaler, whichDelay);
-
-    /* return the actual calculated delay value (in ns) */
-    return (uint32_t)bestDelay;
+    assert(realDelay <= UINT32_MAX);
+    return (uint32_t)realDelay;
 }
 
 /*Transactional APIs -- Master*/
@@ -891,10 +840,147 @@ bool LPSPI_CheckTransferArgument(LPSPI_Type *base, lpspi_transfer_t *transfer, b
     return true;
 }
 
+static bool LPSPI_MasterTransferWriteAllTxData(LPSPI_Type *base,
+                                               lpspi_transfer_t *transfer,
+                                               lpspi_transfer_blocking_param_t *stateParams)
+{
+    uint8_t dummyData             = g_lpspiDummyData[LPSPI_GetInstance(base)];
+    uint32_t bytesPerFrame        = ((LPSPI_GetTcr(base) & LPSPI_TCR_FRAMESZ_MASK) >> LPSPI_TCR_FRAMESZ_SHIFT) / 8U + 1U;
+    uint32_t txRemainingByteCount = transfer->dataSize;
+    bool isByteSwap               = ((transfer->configFlags & (uint32_t)kLPSPI_MasterByteSwap) != 0U);
+    uint32_t wordToSend =
+        ((uint32_t)dummyData) | ((uint32_t)dummyData << 8) | ((uint32_t)dummyData << 16) | ((uint32_t)dummyData << 24);
+    uint32_t readData;
+    uint8_t fifoSize      = LPSPI_GetRxFifoSize(base);
+
+    /* Write the TX data until txRemainingByteCount is equal to 0 */
+    while (txRemainingByteCount > 0U)
+    {
+        if (txRemainingByteCount < stateParams->bytesEachWrite)
+        {
+            stateParams->bytesEachWrite = (uint8_t)txRemainingByteCount;
+        }
+
+        uint32_t wordsToWrite = txRemainingByteCount / stateParams->bytesEachWrite;
+        uint32_t txFifoSpace = fifoSize - LPSPI_GetTxFifoCount(base);
+        if (wordsToWrite > txFifoSpace)
+        {
+            wordsToWrite = txFifoSpace;
+        }
+
+        if (stateParams->isTxMask)
+        {
+            /* When TCR[TXMSK]=1, transfer is initiate by writting a new command word to TCR. TCR[TXMSK] is cleared
+               by hardware every time when TCR[FRAMESZ] bit of data is transfered.
+               In this case TCR[TXMSK] should be set to initiate each transfer. */
+            base->TCR = LPSPI_GetTcr(base) | LPSPI_TCR_TXMSK_MASK;
+            if (stateParams->isPcsContinuous && (txRemainingByteCount == bytesPerFrame))
+            {
+                /* For the last piece of frame size of data, if is PCS continous mode(TCR[CONT]), TCR[CONTC] should
+                 * be cleared to de-assert the PCS. Be sure to clear the TXMSK as well otherwise another FRAMESZ
+                 * of data will be received. */
+                base->TCR = LPSPI_GetTcr(base) & ~(LPSPI_TCR_CONTC_MASK | LPSPI_TCR_CONT_MASK | LPSPI_TCR_TXMSK_MASK);
+            }
+            assert(txRemainingByteCount >= bytesPerFrame);
+            txRemainingByteCount -= bytesPerFrame;
+        }
+        else
+        {
+            txRemainingByteCount -= (stateParams->bytesEachWrite * wordsToWrite);
+
+            while (wordsToWrite > 0U)
+            {
+                if (stateParams->bytesEachWrite == 1U)
+                {
+                    if (stateParams->txData != NULL)
+                    {
+                        base->TDR = *stateParams->txData;
+                        stateParams->txData++;
+                    }
+                    else
+                    {
+                        base->TDR = wordToSend;
+                    }
+                }
+                else
+                {
+                    if (stateParams->txData != NULL)
+                    {
+                        wordToSend = LPSPI_CombineWriteData(stateParams->txData, stateParams->bytesEachWrite, isByteSwap);
+                        stateParams->txData += stateParams->bytesEachWrite;
+                    }
+
+                    base->TDR = wordToSend;
+                }
+                wordsToWrite--;
+            }
+        }
+
+        /* Check whether there is RX data in RX FIFO. Read out the RX data so that the RX FIFO would not overrun. */
+        if ((stateParams->rxData != NULL) && (stateParams->rxRemainingByteCount != 0U))
+        {
+#if SPI_RETRY_TIMES
+            uint32_t waitTimes = SPI_RETRY_TIMES;
+#endif
+            /* To ensure parallel execution in 3-wire mode, after writting 1 to TXMSK to generate clock of
+               bytesPerFrame's data wait until bytesPerFrame's data is received. */
+            while (stateParams->isTxMask && (LPSPI_GetRxFifoCount(base) == 0U))
+            {
+#if SPI_RETRY_TIMES
+                if (--waitTimes == 0U)
+                {
+                    return false;
+                }
+#endif
+            }
+
+            uint8_t *rxDataPtr = stateParams->rxData;
+
+            if (stateParams->rxRemainingByteCount < stateParams->bytesEachRead)
+            {
+                stateParams->bytesEachRead = (uint8_t)stateParams->rxRemainingByteCount;
+            }
+
+            uint32_t wordsToRead = stateParams->rxRemainingByteCount / stateParams->bytesEachRead;
+            uint32_t rxFifoCount = LPSPI_GetRxFifoCount(base);
+            if (wordsToRead > rxFifoCount)
+            {
+                wordsToRead = rxFifoCount;
+            }
+
+            stateParams->rxRemainingByteCount -= (wordsToRead * stateParams->bytesEachRead);
+
+            if (stateParams->bytesEachRead == 1U)
+            {
+                while (wordsToRead > 0U)
+                {
+                    *rxDataPtr = (uint8_t)(base->RDR & 0xFFU);
+                    rxDataPtr++;
+                    wordsToRead--;
+                }
+            }
+            else
+            {
+                while (wordsToRead > 0U)
+                {
+                    readData = base->RDR;
+                    LPSPI_SeparateReadData(rxDataPtr, readData, stateParams->bytesEachRead, isByteSwap);
+                    rxDataPtr += stateParams->bytesEachRead;
+                    wordsToRead--;
+                }
+            }
+
+            stateParams->rxData = rxDataPtr;
+        }
+    }
+
+    return true;
+}
+
 /*!
  * brief LPSPI master transfer data using a polling method.
  *
- * This function transfers data using a  polling method. This is a blocking function, which does not return until all
+ * This function transfers data using a polling method. This is a blocking function, which does not return until all
  * transfers have been completed.
  *
  * Note:
@@ -911,7 +997,7 @@ status_t LPSPI_MasterTransferBlocking(LPSPI_Type *base, lpspi_transfer_t *transf
 {
     assert(transfer != NULL);
 
-    /* Check that LPSPI is not busy.*/
+    /* Check that LPSPI is not busy. */
     if ((LPSPI_GetStatusFlags(base) & (uint32_t)kLPSPI_ModuleBusyFlag) != 0U)
     {
         return kStatus_LPSPI_Busy;
@@ -927,28 +1013,27 @@ status_t LPSPI_MasterTransferBlocking(LPSPI_Type *base, lpspi_transfer_t *transf
     LPSPI_ClearStatusFlags(base, (uint32_t)kLPSPI_AllStatusFlag);
 
     /* Variables */
-    bool isTxMask   = false;
     bool isByteSwap = ((transfer->configFlags & (uint32_t)kLPSPI_MasterByteSwap) != 0U);
-    uint8_t bytesEachWrite;
-    uint8_t bytesEachRead;
-    const uint8_t *txData         = transfer->txData;
-    uint8_t *rxData               = transfer->rxData;
-    uint8_t dummyData             = g_lpspiDummyData[LPSPI_GetInstance(base)];
-    uint32_t readData             = 0U;
-    uint32_t txRemainingByteCount = transfer->dataSize;
-    uint32_t rxRemainingByteCount = transfer->dataSize;
-    uint32_t wordToSend =
-        ((uint32_t)dummyData) | ((uint32_t)dummyData << 8) | ((uint32_t)dummyData << 16) | ((uint32_t)dummyData << 24);
-    /*The TX and RX FIFO sizes are always the same*/
+    uint32_t readData = 0U;
+
+    /* The TX and RX FIFO sizes are always the same */
     uint32_t fifoSize      = LPSPI_GetRxFifoSize(base);
+
     uint32_t bytesPerFrame = ((LPSPI_GetTcr(base) & LPSPI_TCR_FRAMESZ_MASK) >> LPSPI_TCR_FRAMESZ_SHIFT) / 8U + 1U;
+    uint32_t whichPcs      = (transfer->configFlags & LPSPI_MASTER_PCS_MASK) >> LPSPI_MASTER_PCS_SHIFT;
+    uint32_t width         = (transfer->configFlags & LPSPI_MASTER_WIDTH_MASK) >> LPSPI_MASTER_WIDTH_SHIFT;
+    uint32_t temp          = (base->CFGR1 & LPSPI_CFGR1_PINCFG_MASK);
+
+    lpspi_transfer_blocking_param_t stateParams;
+    (void)memset(&stateParams, 0, sizeof(stateParams));
+
+    stateParams.txData               = transfer->txData;
+    stateParams.rxData               = transfer->rxData;
+    stateParams.isTxMask             = false;
+    stateParams.rxRemainingByteCount = transfer->dataSize;
     /* No need to configure PCS continous if the transfer byte count is smaller than frame size */
-    bool isPcsContinuous    = (((transfer->configFlags & (uint32_t)kLPSPI_MasterPcsContinuous) != 0U) &&
-                            (bytesPerFrame < transfer->dataSize));
-    uint32_t rxFifoMaxBytes = MIN(bytesPerFrame, 4U) * fifoSize;
-    uint32_t whichPcs       = (transfer->configFlags & LPSPI_MASTER_PCS_MASK) >> LPSPI_MASTER_PCS_SHIFT;
-    uint32_t width          = (transfer->configFlags & LPSPI_MASTER_WIDTH_MASK) >> LPSPI_MASTER_WIDTH_SHIFT;
-    uint32_t temp           = (base->CFGR1 & LPSPI_CFGR1_PINCFG_MASK);
+    stateParams.isPcsContinuous = (((transfer->configFlags & (uint32_t)kLPSPI_MasterPcsContinuous) != 0U) &&
+                                   (bytesPerFrame < transfer->dataSize));
 
 #if SPI_RETRY_TIMES
     uint32_t waitTimes;
@@ -956,9 +1041,9 @@ status_t LPSPI_MasterTransferBlocking(LPSPI_Type *base, lpspi_transfer_t *transf
 
     /* Mask tx data in half duplex mode */
     if (((temp == LPSPI_CFGR1_PINCFG(kLPSPI_SdiInSdiOut)) || (temp == LPSPI_CFGR1_PINCFG(kLPSPI_SdoInSdoOut))) &&
-        (txData == NULL))
+        (stateParams.txData == NULL))
     {
-        isTxMask = true;
+        stateParams.isTxMask = true;
     }
 
     base->CFGR1 &= (~LPSPI_CFGR1_NOSTALL_MASK);
@@ -966,19 +1051,19 @@ status_t LPSPI_MasterTransferBlocking(LPSPI_Type *base, lpspi_transfer_t *transf
 
     /* Configure transfer control register. */
     base->TCR = (LPSPI_GetTcr(base) & ~(LPSPI_TCR_CONT_MASK | LPSPI_TCR_CONTC_MASK | LPSPI_TCR_RXMSK_MASK |
-                               LPSPI_TCR_TXMSK_MASK | LPSPI_TCR_PCS_MASK)) |
+                               LPSPI_TCR_TXMSK_MASK | LPSPI_TCR_PCS_MASK | LPSPI_TCR_WIDTH_MASK)) |
                 LPSPI_TCR_PCS(whichPcs) | LPSPI_TCR_WIDTH(width);
 
-    /*TCR is also shared the FIFO, so wait for TCR written.*/
+    /* TCR is also shared the FIFO, so wait for TCR written. */
     if (!LPSPI_TxFifoReady(base))
     {
         return kStatus_LPSPI_Timeout;
     }
 
     /* PCS should be configured separately from the other bits, otherwise it will not take effect. */
-    base->TCR = LPSPI_GetTcr(base) | LPSPI_TCR_CONT(isPcsContinuous) | LPSPI_TCR_CONTC(isPcsContinuous) | LPSPI_TCR_RXMSK(NULL == rxData);
+    base->TCR = LPSPI_GetTcr(base) | LPSPI_TCR_CONT(stateParams.isPcsContinuous) | LPSPI_TCR_CONTC(stateParams.isPcsContinuous) | LPSPI_TCR_RXMSK(NULL == stateParams.rxData);
 
-    /*TCR is also shared the FIFO, so wait for TCR written.*/
+    /* TCR is also shared the FIFO, so wait for TCR written. */
     if (!LPSPI_TxFifoReady(base))
     {
         return kStatus_LPSPI_Timeout;
@@ -986,176 +1071,86 @@ status_t LPSPI_MasterTransferBlocking(LPSPI_Type *base, lpspi_transfer_t *transf
 
     if (bytesPerFrame <= 4U)
     {
-        bytesEachWrite = (uint8_t)bytesPerFrame;
-        bytesEachRead  = (uint8_t)bytesPerFrame;
+        stateParams.bytesEachWrite = (uint8_t)bytesPerFrame;
+        stateParams.bytesEachRead  = (uint8_t)bytesPerFrame;
     }
     else
     {
-        bytesEachWrite = 4U;
-        bytesEachRead  = 4U;
+        stateParams.bytesEachWrite = 4U;
+        stateParams.bytesEachRead  = 4U;
     }
 
-    /*Write the TX data until txRemainingByteCount is equal to 0 */
-    while (txRemainingByteCount > 0U)
+    if (false == LPSPI_MasterTransferWriteAllTxData(base, transfer, &stateParams))
     {
-        if (txRemainingByteCount < bytesEachWrite)
-        {
-            bytesEachWrite = (uint8_t)txRemainingByteCount;
-        }
-
-        /*Wait until TX FIFO is not full*/
-#if SPI_RETRY_TIMES
-        waitTimes = SPI_RETRY_TIMES;
-        while ((LPSPI_GetTxFifoCount(base) == fifoSize) && (--waitTimes != 0U))
-#else
-        while (LPSPI_GetTxFifoCount(base) == fifoSize)
-#endif
-        {
-        }
-#if SPI_RETRY_TIMES
-        if (waitTimes == 0U)
-        {
-            return kStatus_LPSPI_Timeout;
-        }
-#endif
-
-        /* To prevent rxfifo overflow, ensure transmitting and receiving are executed in parallel */
-        if (((NULL == rxData) || (rxRemainingByteCount - txRemainingByteCount) < rxFifoMaxBytes))
-        {
-            if (isTxMask)
-            {
-                /* When TCR[TXMSK]=1, transfer is initiate by writting a new command word to TCR. TCR[TXMSK] is cleared
-                   by hardware every time when TCR[FRAMESZ] bit of data is transfered.
-                   In this case TCR[TXMSK] should be set to initiate each transfer. */
-                base->TCR = LPSPI_GetTcr(base) | LPSPI_TCR_TXMSK_MASK;
-                if (isPcsContinuous && (txRemainingByteCount == bytesPerFrame))
-                {
-                    /* For the last piece of frame size of data, if is PCS continous mode(TCR[CONT]), TCR[CONTC] should
-                     * be cleared to de-assert the PCS. Be sure to clear the TXMSK as well otherwise another FRAMESZ
-                     * of data will be received. */
-                    base->TCR = LPSPI_GetTcr(base) & ~(LPSPI_TCR_CONTC_MASK | LPSPI_TCR_CONT_MASK | LPSPI_TCR_TXMSK_MASK);
-                }
-                assert(txRemainingByteCount >= bytesPerFrame);
-                txRemainingByteCount -= bytesPerFrame;
-            }
-            else
-            {
-                if (txData != NULL)
-                {
-                    wordToSend = LPSPI_CombineWriteData(txData, bytesEachWrite, isByteSwap);
-                    txData += bytesEachWrite;
-                }
-                /* Otherwise push data to tx FIFO to initiate transfer */
-                LPSPI_WriteData(base, wordToSend);
-                txRemainingByteCount -= bytesEachWrite;
-            }
-        }
-
-        /* Check whether there is RX data in RX FIFO . Read out the RX data so that the RX FIFO would not overrun. */
-        if ((rxData != NULL) && (rxRemainingByteCount != 0U))
-        {
-            /* To ensure parallel execution in 3-wire mode, after writting 1 to TXMSK to generate clock of
-               bytesPerFrame's data wait until bytesPerFrame's data is received. */
-            while (isTxMask && (LPSPI_GetRxFifoCount(base) == 0U))
-            {
-            }
-#if SPI_RETRY_TIMES
-            waitTimes = SPI_RETRY_TIMES;
-            while ((LPSPI_GetRxFifoCount(base) != 0U) && (--waitTimes != 0U))
-#else
-            while (LPSPI_GetRxFifoCount(base) != 0U)
-#endif
-            {
-                readData = LPSPI_ReadData(base);
-                if (rxRemainingByteCount < bytesEachRead)
-                {
-                    bytesEachRead = (uint8_t)rxRemainingByteCount;
-                }
-
-                LPSPI_SeparateReadData(rxData, readData, bytesEachRead, isByteSwap);
-                rxData += bytesEachRead;
-
-                rxRemainingByteCount -= bytesEachRead;
-            }
-#if SPI_RETRY_TIMES
-            if (waitTimes == 0U)
-            {
-                return kStatus_LPSPI_Timeout;
-            }
-#endif
-        }
+        return kStatus_LPSPI_Timeout;
     }
 
-    if (isPcsContinuous && !isTxMask)
+    if (stateParams.isPcsContinuous && !stateParams.isTxMask)
     {
         /* In PCS continous mode(TCR[CONT]), after write all the data in TX FIFO, TCR[CONTC] and TCR[CONT] should be
            cleared to de-assert the PCS. Note that TCR register also use the TX FIFO. Also CONTC should be cleared when
-           tx is not masked, otherwise written to TCR register with TXMSK bit wet will initiate a new transfer. */
+           tx is not masked, otherwise written to TCR register with TXMSK bit set will initiate a new transfer. */
 #if SPI_RETRY_TIMES
         waitTimes = SPI_RETRY_TIMES;
-        while ((LPSPI_GetTxFifoCount(base) == fifoSize) && (--waitTimes != 0U))
-#else
+#endif
         while (LPSPI_GetTxFifoCount(base) == fifoSize)
-#endif
-        {
-        }
-#if SPI_RETRY_TIMES
-        if (waitTimes == 0U)
-        {
-            return kStatus_LPSPI_Timeout;
-        }
-#endif
-        base->TCR = (LPSPI_GetTcr(base) & ~(LPSPI_TCR_CONTC_MASK | LPSPI_TCR_CONT_MASK));
-    }
-
-    /*Read out the RX data in FIFO*/
-    if (rxData != NULL)
-    {
-        while (rxRemainingByteCount > 0U)
         {
 #if SPI_RETRY_TIMES
-            waitTimes = SPI_RETRY_TIMES;
-            while ((LPSPI_GetRxFifoCount(base) != 0U) && (--waitTimes != 0U))
-#else
-            while (LPSPI_GetRxFifoCount(base) != 0U)
-#endif
-            {
-                readData = LPSPI_ReadData(base);
-
-                if (rxRemainingByteCount < bytesEachRead)
-                {
-                    bytesEachRead = (uint8_t)rxRemainingByteCount;
-                }
-
-                LPSPI_SeparateReadData(rxData, readData, bytesEachRead, isByteSwap);
-                rxData += bytesEachRead;
-
-                rxRemainingByteCount -= bytesEachRead;
-            }
-#if SPI_RETRY_TIMES
-            if (waitTimes == 0U)
+            if (--waitTimes == 0U)
             {
                 return kStatus_LPSPI_Timeout;
             }
 #endif
+        }
+
+        base->TCR = (LPSPI_GetTcr(base) & ~(LPSPI_TCR_CONTC_MASK | LPSPI_TCR_CONT_MASK));
+    }
+
+    /* Read out the RX data in FIFO */
+    if (stateParams.rxData != NULL)
+    {
+        while (stateParams.rxRemainingByteCount > 0U)
+        {
+#if SPI_RETRY_TIMES
+            waitTimes = SPI_RETRY_TIMES;
+#endif
+            while (LPSPI_GetRxFifoCount(base) != 0U)
+            {
+                readData = LPSPI_ReadData(base);
+
+                if (stateParams.rxRemainingByteCount < stateParams.bytesEachRead)
+                {
+                    stateParams.bytesEachRead = (uint8_t)stateParams.rxRemainingByteCount;
+                }
+
+                LPSPI_SeparateReadData(stateParams.rxData, readData, stateParams.bytesEachRead, isByteSwap);
+                stateParams.rxData += stateParams.bytesEachRead;
+
+                stateParams.rxRemainingByteCount -= stateParams.bytesEachRead;
+
+#if SPI_RETRY_TIMES
+                if (--waitTimes == 0U)
+                {
+                    return kStatus_LPSPI_Timeout;
+                }
+#endif
+            }
         }
     }
 
     /* Wait for transfer complete flag, that is the PCS is re-asserted. */
 #if SPI_RETRY_TIMES
     waitTimes = SPI_RETRY_TIMES;
-    while (((LPSPI_GetStatusFlags(base) & (uint32_t)kLPSPI_TransferCompleteFlag) == 0U) && (--waitTimes != 0U))
-#else
+#endif
     while ((LPSPI_GetStatusFlags(base) & (uint32_t)kLPSPI_TransferCompleteFlag) == 0U)
-#endif
     {
-    }
 #if SPI_RETRY_TIMES
-    if (waitTimes == 0U)
-    {
-        return kStatus_LPSPI_Timeout;
-    }
+        if (--waitTimes == 0U)
+        {
+            return kStatus_LPSPI_Timeout;
+        }
 #endif
+    }
 
     return kStatus_Success;
 }

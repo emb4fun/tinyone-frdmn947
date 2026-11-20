@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016, Freescale Semiconductor, Inc.
- * Copyright 2016-2019, 2021, 2024 NXP
+ * Copyright 2016-2019, 2021, 2024, 2026 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -70,7 +70,7 @@ static uint32_t UTICK_GetInstance(UTICK_Type *base)
     /* Find the instance index from base address mappings. */
     for (instance = 0; instance < ARRAY_SIZE(s_utickBases); instance++)
     {
-        if (MSDK_REG_SECURE_ADDR(s_utickBases[instance]) == MSDK_REG_SECURE_ADDR(base))
+        if (MSDK_REG_NONSECURE_ADDR(s_utickBases[instance]) == MSDK_REG_NONSECURE_ADDR(base))
         {
             break;
         }
@@ -196,6 +196,7 @@ void UTICK_HandleIRQ(UTICK_Type *base, utick_callback_t cb)
     }
 }
 
+
 #if defined(UTICK0)
 void UTICK0_DriverIRQHandler(void);
 void UTICK0_DriverIRQHandler(void)
@@ -228,3 +229,12 @@ void UTICK_DriverIRQHandler(void)
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
+
+void UTICK_CommonDriverIRQHandler(uint32_t instance)
+{
+    if (instance < ARRAY_SIZE(s_utickBases))
+    {
+        s_utickIsr(s_utickBases[instance], s_utickHandle[instance]);
+    }
+    SDK_ISR_EXIT_BARRIER;
+}

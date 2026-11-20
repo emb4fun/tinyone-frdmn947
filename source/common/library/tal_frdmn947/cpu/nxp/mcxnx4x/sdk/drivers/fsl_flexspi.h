@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016, Freescale Semiconductor, Inc.
- * Copyright 2016-2025 NXP
+ * Copyright 2016-2026 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -25,7 +25,7 @@
 /*! @name Driver version */
 /*! @{ */
 /*! @brief FLEXSPI driver version. */
-#define FSL_FLEXSPI_DRIVER_VERSION (MAKE_VERSION(2, 7, 0))
+#define FSL_FLEXSPI_DRIVER_VERSION (MAKE_VERSION(2, 9, 3))
 /*! @} */
 
 #define FSL_FEATURE_FLEXSPI_AHB_BUFFER_COUNT FSL_FEATURE_FLEXSPI_AHB_BUFFER_COUNTn(0)
@@ -224,9 +224,18 @@ typedef struct _flexspi_ahbBuffer_config
                           prefetch disable/enable separately for each master. */
 } flexspi_ahbBuffer_config_t;
 
+/*!
+ * @brief Structure to control all AHB buffers.
+ */
+typedef struct _flexspi_ahbBuffers_ctrl
+{
+    flexspi_ahbBuffer_config_t buffer[FSL_FEATURE_FLEXSPI_AHB_BUFFER_COUNT]; /*!< Configurations of all AHB buffers. */
+} flexspi_ahbBuffers_ctrl_t;
+
 /*! @brief FLEXSPI configuration structure. */
 typedef struct _flexspi_config
 {
+    uint8_t clockDiv;                          /*!< FLEXSPI serial root clock divider. */
     flexspi_read_sample_clock_t rxSampleClock; /*!< Sample Clock source selection for Flash Reading. */
     bool enableSckFreeRunning;                 /*!< Enable/disable SCK output free-running. */
 #if !(defined(FSL_FEATURE_FLEXSPI_HAS_NO_MCR0_COMBINATIONEN) && FSL_FEATURE_FLEXSPI_HAS_NO_MCR0_COMBINATIONEN)
@@ -268,6 +277,10 @@ typedef struct _flexspi_config
                                       timeout after ahbBusTimeoutCycle*1024 AHB clock cycles. */
         uint8_t resumeWaitCycle;      /*!< Wait cycle for idle state before suspended command sequence
                                        resume, timeout after ahbBusTimeoutCycle AHB clock cycles. */
+#if (defined(FSL_FEATURE_FLEXSPI_HAS_RESUMEDISABLE_BIT_CONFIG_SUPPORT) && FSL_FEATURE_FLEXSPI_HAS_RESUMEDISABLE_BIT_CONFIG_SUPPORT)
+        bool    disableAhbReadResume; /*!< \b True: Suspended AHB read prefetch does not resume once aborted;
+                                           \b False: Suspended AHB read prefetch resumes when AHB is IDLE. */
+#endif
         flexspi_ahbBuffer_config_t buffer[FSL_FEATURE_FLEXSPI_AHB_BUFFER_COUNT]; /*!< AHB buffer size. */
         bool enableClearAHBBufferOpt; /*!< Enable/disable automatically clean AHB RX Buffer and TX Buffer
                                        when FLEXSPI returns STOP mode ACK. */
@@ -490,6 +503,14 @@ static inline void FLEXSPI_EnableRemap(FLEXSPI_Type *base, bool enable)
 }
 #endif
 
+/*!
+ * @brief Update all AHB buffers' settings, including buffer size, master ID.
+ *
+ * @param base FLEXSPI peripheral base address.
+ * @param ptrAhbBufferCtrl Pointer to structure @ref flexspi_ahbBuffers_ctrl_t which store all AHB buffers' settings.
+ */
+void FLEXSPI_UpdateAhbBuffersSettings(FLEXSPI_Type *base, flexspi_ahbBuffers_ctrl_t *ptrAhbBufferCtrl);
+
 /*! @} */
 
 /*!
@@ -567,7 +588,7 @@ static inline void FLEXSPI_EnableRxDMA(FLEXSPI_Type *base, bool enable)
  */
 static inline uint32_t FLEXSPI_GetTxFifoAddress(FLEXSPI_Type *base)
 {
-    return (uint32_t)&base->TFDR[0];
+    return (uint32_t)(uintptr_t)&base->TFDR[0];
 }
 
 /*!
@@ -578,7 +599,7 @@ static inline uint32_t FLEXSPI_GetTxFifoAddress(FLEXSPI_Type *base)
  */
 static inline uint32_t FLEXSPI_GetRxFifoAddress(FLEXSPI_Type *base)
 {
-    return (uint32_t)&base->RFDR[0];
+    return (uint32_t)(uintptr_t)&base->RFDR[0];
 }
 
 /*! @} */

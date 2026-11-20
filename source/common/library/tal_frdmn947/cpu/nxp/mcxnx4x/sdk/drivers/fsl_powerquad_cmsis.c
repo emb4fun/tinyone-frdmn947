@@ -1,5 +1,5 @@
 /*
- * Copyright 2018-2022 NXP
+ * Copyright 2018-2022, 2025 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -8,6 +8,7 @@
 #include "fsl_powerquad.h"
 #include "fsl_powerquad_data.h"
 #include "arm_math.h"
+#include "fsl_powerquad_cmsis.h"
 
 /*******************************************************************************
  * Definitions
@@ -33,14 +34,14 @@
     POWERQUAD->TMPBASE   = 0xE0000000U
 
 #define PQ_SET_Q31_CONFIG                                                                               \
-    POWERQUAD->OUTFORMAT = ((uint32_t)(-31) << 8U) | ((uint32_t)kPQ_32Bit << 4U) | (uint32_t)kPQ_Float; \
+    POWERQUAD->OUTFORMAT = ( 0xFFFFFFE1UL << 8U) | ((uint32_t)kPQ_32Bit << 4U) | (uint32_t)kPQ_Float; \
     POWERQUAD->INAFORMAT = ((uint32_t)(0) << 8U) | ((uint32_t)kPQ_32Bit << 4U) | (uint32_t)kPQ_Float;   \
     POWERQUAD->INBFORMAT = ((uint32_t)(0) << 8U) | ((uint32_t)kPQ_32Bit << 4U) | (uint32_t)kPQ_Float;   \
     POWERQUAD->TMPFORMAT = ((uint32_t)(0) << 8U) | ((uint32_t)kPQ_Float << 4U) | (uint32_t)kPQ_Float;   \
     POWERQUAD->TMPBASE   = 0xE0000000U
 
 #define PQ_SET_Q15_CONFIG                                                                               \
-    POWERQUAD->OUTFORMAT = ((uint32_t)(-15) << 8U) | ((uint32_t)kPQ_16Bit << 4U) | (uint32_t)kPQ_Float; \
+    POWERQUAD->OUTFORMAT = ( 0xFFFFFFF1UL << 8U) | ((uint32_t)kPQ_16Bit << 4U) | (uint32_t)kPQ_Float; \
     POWERQUAD->INAFORMAT = ((uint32_t)(0) << 8U) | ((uint32_t)kPQ_16Bit << 4U) | (uint32_t)kPQ_Float;   \
     POWERQUAD->INBFORMAT = ((uint32_t)(0) << 8U) | ((uint32_t)kPQ_16Bit << 4U) | (uint32_t)kPQ_Float;   \
     POWERQUAD->TMPFORMAT = ((uint32_t)(0) << 8U) | ((uint32_t)kPQ_Float << 4U) | (uint32_t)kPQ_Float;   \
@@ -102,6 +103,9 @@ static void _arm_fir_increment(const void *pSrc,
                                uint32_t offset,
                                uint32_t elemSize)
 {
+    assert((UINT32_MAX / elemSize) >= offset);
+    assert((uintptr_t)pSrc >= (offset * elemSize));
+
     POWERQUAD->INABASE = ((uint32_t)(const uint32_t *)pSrc) - (offset * elemSize);
     POWERQUAD->INBBASE = (uint32_t)(const uint32_t *)pTap;
     POWERQUAD->LENGTH  = (((uint32_t)tapLen & 0xFFFFUL) << 16U) + (srcLen & 0xFFFFUL);
@@ -110,7 +114,7 @@ static void _arm_fir_increment(const void *pSrc,
     POWERQUAD->CONTROL = (CP_FIR << 4U) | PQ_FIR_INCREMENTAL;
 }
 
-float32_t arm_cos_f32(float32_t x)
+float32_t pq_arm_cos_f32(float32_t x)
 {
     float tmp;
 
@@ -118,7 +122,7 @@ float32_t arm_cos_f32(float32_t x)
     return tmp;
 }
 
-q31_t arm_cos_q31(q31_t x)
+q31_t pq_arm_cos_q31(q31_t x)
 {
     /* For PQ: input -1 to 1 means -pi to pi
      * For CMSIS DSP: input 0 to 1 means pi to 2*pi */
@@ -126,7 +130,7 @@ q31_t arm_cos_q31(q31_t x)
     return PQ_CosQ31(x);
 }
 
-q15_t arm_cos_q15(q15_t x)
+q15_t pq_arm_cos_q15(q15_t x)
 {
     /* For PQ: input -1 to 1 means -pi to pi
      * For CMSIS DSP: input 0 to 1 means pi to 2*pi */
@@ -134,7 +138,7 @@ q15_t arm_cos_q15(q15_t x)
     return PQ_CosQ15(x);
 }
 
-float32_t arm_sin_f32(float32_t x)
+float32_t pq_arm_sin_f32(float32_t x)
 {
     float tmp;
 
@@ -142,7 +146,7 @@ float32_t arm_sin_f32(float32_t x)
     return tmp;
 }
 
-q31_t arm_sin_q31(q31_t x)
+q31_t pq_arm_sin_q31(q31_t x)
 {
     /* For PQ: input -1 to 1 means -pi to pi
      * For CMSIS DSP: input 0 to 1 means pi to 2*pi */
@@ -150,7 +154,7 @@ q31_t arm_sin_q31(q31_t x)
     return PQ_SinQ31(x);
 }
 
-q15_t arm_sin_q15(q15_t x)
+q15_t pq_arm_sin_q15(q15_t x)
 {
     /* For PQ: input -1 to 1 means -pi to pi
      * For CMSIS DSP: input 0 to 1 means pi to 2*pi */
@@ -158,7 +162,7 @@ q15_t arm_sin_q15(q15_t x)
     return PQ_SinQ15(x);
 }
 
-arm_status arm_sqrt_q31(q31_t in, q31_t *pOut)
+arm_status pq_arm_sqrt_q31(q31_t in, q31_t *pOut)
 {
     uint32_t cppre;
     arm_status status;
@@ -184,7 +188,7 @@ arm_status arm_sqrt_q31(q31_t in, q31_t *pOut)
     return status;
 }
 
-arm_status arm_sqrt_q15(q15_t in, q15_t *pOut)
+arm_status pq_arm_sqrt_q15(q15_t in, q15_t *pOut)
 {
     uint32_t cppre;
     arm_status status;
@@ -210,7 +214,7 @@ arm_status arm_sqrt_q15(q15_t in, q15_t *pOut)
     return status;
 }
 
-void arm_cfft_q31(const arm_cfft_instance_q31 *S, q31_t *p1, uint8_t ifftFlag, uint8_t bitReverseFlag)
+void pq_arm_cfft_q31(const arm_cfft_instance_q31 *S, q31_t *p1, uint8_t ifftFlag, uint8_t bitReverseFlag)
 {
     assert(bitReverseFlag == 1U);
 
@@ -232,7 +236,7 @@ void arm_cfft_q31(const arm_cfft_instance_q31 *S, q31_t *p1, uint8_t ifftFlag, u
     PQ_WaitDone(POWERQUAD);
 }
 
-void arm_cfft_q15(const arm_cfft_instance_q15 *S, q15_t *p1, uint8_t ifftFlag, uint8_t bitReverseFlag)
+void pq_arm_cfft_q15(const arm_cfft_instance_q15 *S, q15_t *p1, uint8_t ifftFlag, uint8_t bitReverseFlag)
 {
     assert(bitReverseFlag == 1U);
 
@@ -254,7 +258,7 @@ void arm_cfft_q15(const arm_cfft_instance_q15 *S, q15_t *p1, uint8_t ifftFlag, u
     PQ_WaitDone(POWERQUAD);
 }
 
-arm_status arm_rfft_init_q31(arm_rfft_instance_q31 *S, uint32_t fftLenReal, uint32_t ifftFlagR, uint32_t bitReverseFlag)
+arm_status pq_arm_rfft_init_q31(arm_rfft_instance_q31 *S, uint32_t fftLenReal, uint32_t ifftFlagR, uint32_t bitReverseFlag)
 {
     /* Only supprt such mode. */
     assert(ifftFlagR == 0U);
@@ -264,7 +268,7 @@ arm_status arm_rfft_init_q31(arm_rfft_instance_q31 *S, uint32_t fftLenReal, uint
     arm_status status = ARM_MATH_SUCCESS;
 
     /*  Initialize the Real FFT length */
-    S->fftLenReal = (uint16_t)fftLenReal;
+    S->fftLenReal = fftLenReal;
 
     /*  Initialize the Flag for selection of RFFT or RIFFT */
     S->ifftFlagR = (uint8_t)ifftFlagR;
@@ -276,7 +280,7 @@ arm_status arm_rfft_init_q31(arm_rfft_instance_q31 *S, uint32_t fftLenReal, uint
     return (status);
 }
 
-void arm_rfft_q31(const arm_rfft_instance_q31 *S, q31_t *pSrc, q31_t *pDst)
+void pq_arm_rfft_q31(const arm_rfft_instance_q31 *S, q31_t *pSrc, q31_t *pDst)
 {
     uint32_t length = S->fftLenReal;
     PQ_SET_FFT_Q31_CONFIG;
@@ -287,7 +291,7 @@ void arm_rfft_q31(const arm_rfft_instance_q31 *S, q31_t *pSrc, q31_t *pDst)
     PQ_WaitDone(POWERQUAD);
 }
 
-arm_status arm_rfft_init_q15(arm_rfft_instance_q15 *S, uint32_t fftLenReal, uint32_t ifftFlagR, uint32_t bitReverseFlag)
+arm_status pq_arm_rfft_init_q15(arm_rfft_instance_q15 *S, uint32_t fftLenReal, uint32_t ifftFlagR, uint32_t bitReverseFlag)
 {
     /* Only supprt such mode. */
     assert(ifftFlagR == 0U);
@@ -297,7 +301,7 @@ arm_status arm_rfft_init_q15(arm_rfft_instance_q15 *S, uint32_t fftLenReal, uint
     arm_status status = ARM_MATH_SUCCESS;
 
     /*  Initialize the Real FFT length */
-    S->fftLenReal = (uint16_t)fftLenReal;
+    S->fftLenReal = fftLenReal;
 
     /*  Initialize the Flag for selection of RFFT or RIFFT */
     S->ifftFlagR = (uint8_t)ifftFlagR;
@@ -309,7 +313,7 @@ arm_status arm_rfft_init_q15(arm_rfft_instance_q15 *S, uint32_t fftLenReal, uint
     return (status);
 }
 
-void arm_rfft_q15(const arm_rfft_instance_q15 *S, q15_t *pSrc, q15_t *pDst)
+void pq_arm_rfft_q15(const arm_rfft_instance_q15 *S, q15_t *pSrc, q15_t *pDst)
 {
     uint32_t length = S->fftLenReal;
     PQ_SET_FFT_Q15_CONFIG;
@@ -320,7 +324,7 @@ void arm_rfft_q15(const arm_rfft_instance_q15 *S, q15_t *pSrc, q15_t *pDst)
     PQ_WaitDone(POWERQUAD);
 }
 
-arm_status arm_dct4_init_q31(arm_dct4_instance_q31 *S,
+arm_status pq_arm_dct4_init_q31(arm_dct4_instance_q31 *S,
                              arm_rfft_instance_q31 *S_RFFT,
                              arm_cfft_radix4_instance_q31 *S_CFFT,
                              uint16_t N,
@@ -382,10 +386,10 @@ arm_status arm_dct4_init_q31(arm_dct4_instance_q31 *S,
     return status;
 }
 
-void arm_dct4_q31(const arm_dct4_instance_q31 *S, q31_t *pState, q31_t *pInlineBuffer)
+void pq_arm_dct4_q31(const arm_dct4_instance_q31 *S, q31_t *pState, q31_t *pInlineBuffer)
 {
     /* Calculate DCT-II for N-point input */
-    uint16_t i;           /* Loop counter */
+    uint32_t i;           /* Loop counter */
     const q31_t *weights; /* Pointer to the Weights table */
     q31_t *pOut;          /* Temporary pointers for output buffer */
     q31_t *pS1, *pbuff;   /* Temporary pointers for input buffer and pState buffer */
@@ -394,7 +398,7 @@ void arm_dct4_q31(const arm_dct4_instance_q31 *S, q31_t *pState, q31_t *pInlineB
     uint32_t length;
     uint8_t matRow;
     uint8_t matCol;
-    uint8_t matLoop;
+    uint16_t matLoop;
     uint16_t lenPerMatLoop;
 
     /*
@@ -449,7 +453,7 @@ void arm_dct4_q31(const arm_dct4_instance_q31 *S, q31_t *pState, q31_t *pInlineB
      */
     lenPerMatLoop = S->N >= 128U ? 128U : S->N;
     matCol        = (uint8_t)(lenPerMatLoop / 8U);
-    matLoop       = (uint8_t)(((S->N - 1U) >> 7U) + 1U);
+    matLoop       = (uint16_t)(((S->N - 1U) >> 7U) + 1U);
     weights       = S->pTwiddle;
     pOut          = pState;
 
@@ -540,7 +544,7 @@ void arm_dct4_q31(const arm_dct4_instance_q31 *S, q31_t *pState, q31_t *pInlineB
     }
 }
 
-arm_status arm_dct4_init_q15(arm_dct4_instance_q15 *S,
+arm_status pq_arm_dct4_init_q15(arm_dct4_instance_q15 *S,
                              arm_rfft_instance_q15 *S_RFFT,
                              arm_cfft_radix4_instance_q15 *S_CFFT,
                              uint16_t N,
@@ -603,7 +607,7 @@ arm_status arm_dct4_init_q15(arm_dct4_instance_q15 *S,
     return status;
 }
 
-void arm_dct4_q15(const arm_dct4_instance_q15 *S, q15_t *pState, q15_t *pInlineBuffer)
+void pq_arm_dct4_q15(const arm_dct4_instance_q15 *S, q15_t *pState, q15_t *pInlineBuffer)
 {
     /* Calculate DCT-II for N-point input */
     uint16_t i;           /* Loop counter */
@@ -769,7 +773,7 @@ void arm_dct4_q15(const arm_dct4_instance_q15 *S, q15_t *pState, q15_t *pInlineB
     }
 }
 
-void arm_fir_init_f32(
+void pq_arm_fir_init_f32(
     arm_fir_instance_f32 *S, uint16_t numTaps, const float32_t *pCoeffs, float32_t *pState, uint32_t blockSize)
 {
     uint32_t i;
@@ -796,7 +800,7 @@ void arm_fir_init_f32(
     *(uint32_t *)(void *)pState = 0U;
 }
 
-void arm_fir_init_q31(
+void pq_arm_fir_init_q31(
     arm_fir_instance_q31 *S, uint16_t numTaps, const q31_t *pCoeffs, q31_t *pState, uint32_t blockSize)
 {
     uint32_t i;
@@ -823,7 +827,7 @@ void arm_fir_init_q31(
     pState[0] = 0;
 }
 
-arm_status arm_fir_init_q15(
+arm_status pq_arm_fir_init_q15(
     arm_fir_instance_q15 *S, uint16_t numTaps, const q15_t *pCoeffs, q15_t *pState, uint32_t blockSize)
 {
     uint16_t i;
@@ -862,11 +866,12 @@ arm_status arm_fir_init_q15(
  * Note: Powerquad has a hardware limitation, when using it for FIR increment calculation, the address of pSrc needs to
  * be a continuous address.
  */
-void arm_fir_f32(const arm_fir_instance_f32 *S, const float32_t *pSrc, float32_t *pDst, uint32_t blockSize)
+void pq_arm_fir_f32(const arm_fir_instance_f32 *S, const float32_t *pSrc, float32_t *pDst, uint32_t blockSize)
 {
     assert(NULL != S);
     assert(NULL != pSrc);
     assert(NULL != pDst);
+    assert(blockSize <= UINT16_MAX);
 
     uint32_t curOffset;
     PQ_SET_F32_CONFIG;
@@ -887,11 +892,12 @@ void arm_fir_f32(const arm_fir_instance_f32 *S, const float32_t *pSrc, float32_t
     PQ_WaitDone(POWERQUAD);
 }
 
-void arm_fir_q31(const arm_fir_instance_q31 *S, const q31_t *pSrc, q31_t *pDst, uint32_t blockSize)
+void pq_arm_fir_q31(const arm_fir_instance_q31 *S, const q31_t *pSrc, q31_t *pDst, uint32_t blockSize)
 {
     assert(NULL != S);
     assert(NULL != pSrc);
     assert(NULL != pDst);
+    assert(blockSize <= UINT16_MAX);
 
     uint32_t curOffset;
     PQ_SET_Q31_CONFIG;
@@ -900,7 +906,7 @@ void arm_fir_q31(const arm_fir_instance_q31 *S, const q31_t *pSrc, q31_t *pDst, 
 
     if (curOffset == 0U)
     {
-        PQ_FIR(POWERQUAD, pSrc, (int32_t)blockSize, &(S->pState[1]), (int32_t)S->numTaps, pDst, PQ_FIR_FIR);
+        PQ_FIR(POWERQUAD, pSrc, (uint16_t)blockSize, &(S->pState[1]), (uint16_t)S->numTaps, pDst, PQ_FIR_FIR);
     }
     else
     {
@@ -912,11 +918,12 @@ void arm_fir_q31(const arm_fir_instance_q31 *S, const q31_t *pSrc, q31_t *pDst, 
     PQ_WaitDone(POWERQUAD);
 }
 
-void arm_fir_q15(const arm_fir_instance_q15 *S, const q15_t *pSrc, q15_t *pDst, uint32_t blockSize)
+void pq_arm_fir_q15(const arm_fir_instance_q15 *S, const q15_t *pSrc, q15_t *pDst, uint32_t blockSize)
 {
     assert(NULL != S);
     assert(NULL != pSrc);
     assert(NULL != pDst);
+    assert(blockSize <= UINT16_MAX);
 
     uint32_t curOffset;
 
@@ -926,7 +933,7 @@ void arm_fir_q15(const arm_fir_instance_q15 *S, const q15_t *pSrc, q15_t *pDst, 
 
     if (curOffset == 0U)
     {
-        PQ_FIR(POWERQUAD, pSrc, (int32_t)blockSize, &(S->pState[2]), (int32_t)S->numTaps, pDst, PQ_FIR_FIR);
+        PQ_FIR(POWERQUAD, pSrc, (uint16_t)blockSize, &(S->pState[2]), (uint16_t)S->numTaps, pDst, PQ_FIR_FIR);
     }
     else
     {
@@ -938,80 +945,86 @@ void arm_fir_q15(const arm_fir_instance_q15 *S, const q15_t *pSrc, q15_t *pDst, 
     PQ_WaitDone(POWERQUAD);
 }
 
-void arm_conv_f32(const float32_t *pSrcA, uint32_t srcALen, const float32_t *pSrcB, uint32_t srcBLen, float32_t *pDst)
+void pq_arm_conv_f32(const float32_t *pSrcA, uint32_t srcALen, const float32_t *pSrcB, uint32_t srcBLen, float32_t *pDst)
 {
     assert(NULL != pSrcA);
     assert(NULL != pSrcB);
     assert(NULL != pDst);
+    assert((srcALen <= UINT16_MAX) && (srcBLen <= UINT16_MAX));
 
     PQ_SET_F32_CONFIG;
 
-    PQ_FIR(POWERQUAD, pSrcA, (int32_t)srcALen, pSrcB, (int32_t)srcBLen, pDst, PQ_FIR_CONVOLUTION);
+    PQ_FIR(POWERQUAD, pSrcA, (uint16_t)srcALen, pSrcB, (uint16_t)srcBLen, pDst, PQ_FIR_CONVOLUTION);
     PQ_WaitDone(POWERQUAD);
 }
 
-void arm_conv_q31(const q31_t *pSrcA, uint32_t srcALen, const q31_t *pSrcB, uint32_t srcBLen, q31_t *pDst)
+void pq_arm_conv_q31(const q31_t *pSrcA, uint32_t srcALen, const q31_t *pSrcB, uint32_t srcBLen, q31_t *pDst)
 {
     assert(NULL != pSrcA);
     assert(NULL != pSrcB);
     assert(NULL != pDst);
+    assert((srcALen <= UINT16_MAX) && (srcBLen <= UINT16_MAX));
 
     PQ_SET_Q31_CONFIG;
 
-    PQ_FIR(POWERQUAD, pSrcA, (int32_t)srcALen, pSrcB, (int32_t)srcBLen, pDst, PQ_FIR_CONVOLUTION);
+    PQ_FIR(POWERQUAD, pSrcA, (uint16_t)srcALen, pSrcB, (uint16_t)srcBLen, pDst, PQ_FIR_CONVOLUTION);
     PQ_WaitDone(POWERQUAD);
 }
 
-void arm_conv_q15(const q15_t *pSrcA, uint32_t srcALen, const q15_t *pSrcB, uint32_t srcBLen, q15_t *pDst)
+void pq_arm_conv_q15(const q15_t *pSrcA, uint32_t srcALen, const q15_t *pSrcB, uint32_t srcBLen, q15_t *pDst)
 {
     assert(NULL != pSrcA);
     assert(NULL != pSrcB);
     assert(NULL != pDst);
+    assert((srcALen <= UINT16_MAX) && (srcBLen <= UINT16_MAX));
 
     PQ_SET_Q15_CONFIG;
 
-    PQ_FIR(POWERQUAD, pSrcA, (int32_t)srcALen, pSrcB, (int32_t)srcBLen, pDst, PQ_FIR_CONVOLUTION);
+    PQ_FIR(POWERQUAD, pSrcA, (uint16_t)srcALen, pSrcB, (uint16_t)srcBLen, pDst, PQ_FIR_CONVOLUTION);
     PQ_WaitDone(POWERQUAD);
 }
 
-void arm_correlate_f32(
+void pq_arm_correlate_f32(
     const float32_t *pSrcA, uint32_t srcALen, const float32_t *pSrcB, uint32_t srcBLen, float32_t *pDst)
 {
     assert(NULL != pSrcA);
     assert(NULL != pSrcB);
     assert(NULL != pDst);
+    assert((srcALen <= UINT16_MAX) && (srcBLen <= UINT16_MAX));
 
     PQ_SET_F32_CONFIG;
 
-    PQ_FIR(POWERQUAD, pSrcA, (int32_t)srcALen, pSrcB, (int32_t)srcBLen, pDst, PQ_FIR_CORRELATION);
+    PQ_FIR(POWERQUAD, pSrcA, (uint16_t)srcALen, pSrcB, (uint16_t)srcBLen, pDst, PQ_FIR_CORRELATION);
     PQ_WaitDone(POWERQUAD);
 }
 
-void arm_correlate_q31(const q31_t *pSrcA, uint32_t srcALen, const q31_t *pSrcB, uint32_t srcBLen, q31_t *pDst)
+void pq_arm_correlate_q31(const q31_t *pSrcA, uint32_t srcALen, const q31_t *pSrcB, uint32_t srcBLen, q31_t *pDst)
 {
     assert(NULL != pSrcA);
     assert(NULL != pSrcB);
     assert(NULL != pDst);
+    assert((srcALen <= UINT16_MAX) && (srcBLen <= UINT16_MAX));
 
     PQ_SET_Q31_CONFIG;
 
-    PQ_FIR(POWERQUAD, pSrcA, (int32_t)srcALen, pSrcB, (int32_t)srcBLen, pDst, PQ_FIR_CORRELATION);
+    PQ_FIR(POWERQUAD, pSrcA, (uint16_t)srcALen, pSrcB, (uint16_t)srcBLen, pDst, PQ_FIR_CORRELATION);
     PQ_WaitDone(POWERQUAD);
 }
 
-void arm_correlate_q15(const q15_t *pSrcA, uint32_t srcALen, const q15_t *pSrcB, uint32_t srcBLen, q15_t *pDst)
+void pq_arm_correlate_q15(const q15_t *pSrcA, uint32_t srcALen, const q15_t *pSrcB, uint32_t srcBLen, q15_t *pDst)
 {
     assert(NULL != pSrcA);
     assert(NULL != pSrcB);
     assert(NULL != pDst);
+    assert((srcALen <= UINT16_MAX) && (srcBLen <= UINT16_MAX));
 
     PQ_SET_Q15_CONFIG;
 
-    PQ_FIR(POWERQUAD, pSrcA, (int32_t)srcALen, pSrcB, (int32_t)srcBLen, pDst, PQ_FIR_CORRELATION);
+    PQ_FIR(POWERQUAD, pSrcA, (uint16_t)srcALen, pSrcB, (uint16_t)srcBLen, pDst, PQ_FIR_CORRELATION);
     PQ_WaitDone(POWERQUAD);
 }
 
-void arm_mat_init_f32(arm_matrix_instance_f32 *S, uint16_t nRows, uint16_t nColumns, float32_t *pData)
+void pq_arm_mat_init_f32(arm_matrix_instance_f32 *S, uint16_t nRows, uint16_t nColumns, float32_t *pData)
 {
     /* Assign Number of Rows */
     S->numRows = nRows;
@@ -1023,7 +1036,7 @@ void arm_mat_init_f32(arm_matrix_instance_f32 *S, uint16_t nRows, uint16_t nColu
     S->pData = pData;
 }
 
-void arm_mat_init_q31(arm_matrix_instance_q31 *S, uint16_t nRows, uint16_t nColumns, q31_t *pData)
+void pq_arm_mat_init_q31(arm_matrix_instance_q31 *S, uint16_t nRows, uint16_t nColumns, q31_t *pData)
 {
     /* Assign Number of Rows */
     S->numRows = nRows;
@@ -1035,7 +1048,7 @@ void arm_mat_init_q31(arm_matrix_instance_q31 *S, uint16_t nRows, uint16_t nColu
     S->pData = pData;
 }
 
-void arm_mat_init_q15(arm_matrix_instance_q15 *S, uint16_t nRows, uint16_t nColumns, q15_t *pData)
+void pq_arm_mat_init_q15(arm_matrix_instance_q15 *S, uint16_t nRows, uint16_t nColumns, q15_t *pData)
 {
     /* Assign Number of Rows */
     S->numRows = nRows;
@@ -1047,7 +1060,7 @@ void arm_mat_init_q15(arm_matrix_instance_q15 *S, uint16_t nRows, uint16_t nColu
     S->pData = pData;
 }
 
-arm_status arm_mat_add_f32(const arm_matrix_instance_f32 *pSrcA,
+arm_status pq_arm_mat_add_f32(const arm_matrix_instance_f32 *pSrcA,
                            const arm_matrix_instance_f32 *pSrcB,
                            arm_matrix_instance_f32 *pDst)
 {
@@ -1085,7 +1098,7 @@ arm_status arm_mat_add_f32(const arm_matrix_instance_f32 *pSrcA,
     return status;
 }
 
-arm_status arm_mat_add_q31(const arm_matrix_instance_q31 *pSrcA,
+arm_status pq_arm_mat_add_q31(const arm_matrix_instance_q31 *pSrcA,
                            const arm_matrix_instance_q31 *pSrcB,
                            arm_matrix_instance_q31 *pDst)
 {
@@ -1123,7 +1136,7 @@ arm_status arm_mat_add_q31(const arm_matrix_instance_q31 *pSrcA,
     return status;
 }
 
-arm_status arm_mat_add_q15(const arm_matrix_instance_q15 *pSrcA,
+arm_status pq_arm_mat_add_q15(const arm_matrix_instance_q15 *pSrcA,
                            const arm_matrix_instance_q15 *pSrcB,
                            arm_matrix_instance_q15 *pDst)
 {
@@ -1161,7 +1174,7 @@ arm_status arm_mat_add_q15(const arm_matrix_instance_q15 *pSrcA,
     return status;
 }
 
-arm_status arm_mat_sub_f32(const arm_matrix_instance_f32 *pSrcA,
+arm_status pq_arm_mat_sub_f32(const arm_matrix_instance_f32 *pSrcA,
                            const arm_matrix_instance_f32 *pSrcB,
                            arm_matrix_instance_f32 *pDst)
 {
@@ -1199,7 +1212,7 @@ arm_status arm_mat_sub_f32(const arm_matrix_instance_f32 *pSrcA,
     return status;
 }
 
-arm_status arm_mat_sub_q31(const arm_matrix_instance_q31 *pSrcA,
+arm_status pq_arm_mat_sub_q31(const arm_matrix_instance_q31 *pSrcA,
                            const arm_matrix_instance_q31 *pSrcB,
                            arm_matrix_instance_q31 *pDst)
 {
@@ -1237,7 +1250,7 @@ arm_status arm_mat_sub_q31(const arm_matrix_instance_q31 *pSrcA,
     return status;
 }
 
-arm_status arm_mat_sub_q15(const arm_matrix_instance_q15 *pSrcA,
+arm_status pq_arm_mat_sub_q15(const arm_matrix_instance_q15 *pSrcA,
                            const arm_matrix_instance_q15 *pSrcB,
                            arm_matrix_instance_q15 *pDst)
 {
@@ -1275,7 +1288,7 @@ arm_status arm_mat_sub_q15(const arm_matrix_instance_q15 *pSrcA,
     return status;
 }
 
-arm_status arm_mat_mult_f32(const arm_matrix_instance_f32 *pSrcA,
+arm_status pq_arm_mat_mult_f32(const arm_matrix_instance_f32 *pSrcA,
                             const arm_matrix_instance_f32 *pSrcB,
                             arm_matrix_instance_f32 *pDst)
 {
@@ -1313,7 +1326,7 @@ arm_status arm_mat_mult_f32(const arm_matrix_instance_f32 *pSrcA,
     return status;
 }
 
-arm_status arm_mat_mult_q31(const arm_matrix_instance_q31 *pSrcA,
+arm_status pq_arm_mat_mult_q31(const arm_matrix_instance_q31 *pSrcA,
                             const arm_matrix_instance_q31 *pSrcB,
                             arm_matrix_instance_q31 *pDst)
 {
@@ -1368,7 +1381,7 @@ arm_status arm_mat_mult_q31(const arm_matrix_instance_q31 *pSrcA,
     return status;
 }
 
-arm_status arm_mat_mult_q15(const arm_matrix_instance_q15 *pSrcA,
+arm_status pq_arm_mat_mult_q15(const arm_matrix_instance_q15 *pSrcA,
                             const arm_matrix_instance_q15 *pSrcB,
                             arm_matrix_instance_q15 *pDst,
                             q15_t *pState)
@@ -1416,7 +1429,7 @@ arm_status arm_mat_mult_q15(const arm_matrix_instance_q15 *pSrcA,
     return status;
 }
 
-arm_status arm_mat_inverse_f32(const arm_matrix_instance_f32 *src, arm_matrix_instance_f32 *dst)
+arm_status pq_arm_mat_inverse_f32(const arm_matrix_instance_f32 *src, arm_matrix_instance_f32 *dst)
 {
     assert(NULL != src);
     assert(NULL != dst);
@@ -1451,7 +1464,7 @@ arm_status arm_mat_inverse_f32(const arm_matrix_instance_f32 *src, arm_matrix_in
     return status;
 }
 
-arm_status arm_mat_trans_f32(const arm_matrix_instance_f32 *pSrc, arm_matrix_instance_f32 *pDst)
+arm_status pq_arm_mat_trans_f32(const arm_matrix_instance_f32 *pSrc, arm_matrix_instance_f32 *pDst)
 {
     assert(NULL != pSrc);
     assert(NULL != pDst);
@@ -1484,7 +1497,7 @@ arm_status arm_mat_trans_f32(const arm_matrix_instance_f32 *pSrc, arm_matrix_ins
     return status;
 }
 
-arm_status arm_mat_trans_q31(const arm_matrix_instance_q31 *pSrc, arm_matrix_instance_q31 *pDst)
+arm_status pq_arm_mat_trans_q31(const arm_matrix_instance_q31 *pSrc, arm_matrix_instance_q31 *pDst)
 {
     assert(NULL != pSrc);
     assert(NULL != pDst);
@@ -1518,7 +1531,7 @@ arm_status arm_mat_trans_q31(const arm_matrix_instance_q31 *pSrc, arm_matrix_ins
     return status;
 }
 
-arm_status arm_mat_trans_q15(const arm_matrix_instance_q15 *pSrc, arm_matrix_instance_q15 *pDst)
+arm_status pq_arm_mat_trans_q15(const arm_matrix_instance_q15 *pSrc, arm_matrix_instance_q15 *pDst)
 {
     assert(NULL != pSrc);
     assert(NULL != pDst);
@@ -1552,7 +1565,7 @@ arm_status arm_mat_trans_q15(const arm_matrix_instance_q15 *pSrc, arm_matrix_ins
     return status;
 }
 
-arm_status arm_mat_scale_f32(const arm_matrix_instance_f32 *pSrc, float32_t scale, arm_matrix_instance_f32 *pDst)
+arm_status pq_arm_mat_scale_f32(const arm_matrix_instance_f32 *pSrc, float32_t scale, arm_matrix_instance_f32 *pDst)
 {
     assert(NULL != pSrc);
     assert(NULL != pDst);
@@ -1586,7 +1599,7 @@ arm_status arm_mat_scale_f32(const arm_matrix_instance_f32 *pSrc, float32_t scal
     return status;
 }
 
-arm_status arm_mat_scale_q31(const arm_matrix_instance_q31 *pSrc,
+arm_status pq_arm_mat_scale_q31(const arm_matrix_instance_q31 *pSrc,
                              q31_t scaleFract,
                              int32_t shift,
                              arm_matrix_instance_q31 *pDst)
@@ -1639,7 +1652,7 @@ arm_status arm_mat_scale_q31(const arm_matrix_instance_q31 *pSrc,
     return status;
 }
 
-arm_status arm_mat_scale_q15(const arm_matrix_instance_q15 *pSrc,
+arm_status pq_arm_mat_scale_q15(const arm_matrix_instance_q15 *pSrc,
                              q15_t scaleFract,
                              int32_t shift,
                              arm_matrix_instance_q15 *pDst)

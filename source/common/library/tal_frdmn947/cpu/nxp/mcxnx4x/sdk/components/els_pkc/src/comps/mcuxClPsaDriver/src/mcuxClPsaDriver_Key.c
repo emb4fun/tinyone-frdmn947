@@ -1,17 +1,36 @@
 /*--------------------------------------------------------------------------*/
-/* Copyright 2023-2024 NXP                                                  */
+/* Copyright 2023-2025 NXP                                                  */
 /*                                                                          */
-/* NXP Proprietary. This software is owned or controlled by NXP and may     */
-/* only be used strictly in accordance with the applicable license terms.   */
-/* By expressly accepting such terms or by downloading, installing,         */
-/* activating and/or otherwise using the software, you are agreeing that    */
-/* you have read, and that you agree to comply with and are bound by, such  */
-/* license terms.  If you do not agree to be bound by the applicable        */
-/* license terms, then you may not retain, install, activate or otherwise   */
-/* use the software.                                                        */
+/* SPDX-License-Identifier: BSD-3-Clause                                    */
+/*                                                                          */
+/* Redistribution and use in source and binary forms, with or without       */
+/* modification, are permitted provided that the following conditions are   */
+/* met:                                                                     */
+/*                                                                          */
+/* 1. Redistributions of source code must retain the above copyright        */
+/*    notice, this list of conditions and the following disclaimer.         */
+/*                                                                          */
+/* 2. Redistributions in binary form must reproduce the above copyright     */
+/*    notice, this list of conditions and the following disclaimer in the   */
+/*    documentation and/or other materials provided with the distribution.  */
+/*                                                                          */
+/* 3. Neither the name of the copyright holder nor the names of its         */
+/*    contributors may be used to endorse or promote products derived from  */
+/*    this software without specific prior written permission.              */
+/*                                                                          */
+/* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS  */
+/* IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED    */
+/* TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A          */
+/* PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT       */
+/* HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,   */
+/* SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED */
+/* TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR   */
+/* PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF   */
+/* LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING     */
+/* NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS       */
+/* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.             */
 /*--------------------------------------------------------------------------*/
 
-#include "common.h"
 
 #include <mcuxClAes_KeyTypes.h>
 #include <mcuxClHmac_KeyTypes.h>
@@ -266,10 +285,12 @@ static psa_status_t mcuxClPsaDriver_psa_driver_wrapper_generate_random( uint8_t 
     /* Random init                                                            */
     /**************************************************************************/
 
+    mcuxClRandom_Context_t pRng_ctx;
+    mcuxClRandom_Mode_t    randomMode;
+#if defined(MCUXCL_FEATURE_RANDOMMODES_SECSTRENGTH_256)
     /* Initialize the RNG context, with maximum size */
     uint32_t rng_ctx[MCUXCLRANDOMMODES_CTR_DRBG_AES256_CONTEXT_SIZE_IN_WORDS] = {0u};
-
-    mcuxClRandom_Mode_t randomMode = NULL;
+    pRng_ctx = mcuxClRandom_castToContext(rng_ctx);
     if(output_size <= 16u)  /* 128-bit security strength */
     {
       randomMode = mcuxClRandomModes_Mode_ELS_Drbg;
@@ -278,10 +299,14 @@ static psa_status_t mcuxClPsaDriver_psa_driver_wrapper_generate_random( uint8_t 
     {
       randomMode = mcuxClRandomModes_Mode_CtrDrbg_AES256_DRG3;
     }
+#else
+    pRng_ctx = NULL;
+    randomMode = mcuxClRandomModes_Mode_ELS_Drbg;
+#endif
 
     MCUX_CSSL_FP_FUNCTION_CALL_BEGIN(retRandomInit, tokenRandInit, mcuxClRandom_init(
                                                   &session,
-                                                  mcuxClRandom_castToContext(rng_ctx),
+                                                  pRng_ctx,
                                                   randomMode));
     if((MCUX_CSSL_FP_FUNCTION_CALLED(mcuxClRandom_init) != tokenRandInit) || (MCUXCLRANDOM_STATUS_OK != retRandomInit))
     {
@@ -684,7 +709,7 @@ MCUX_CSSL_ANALYSIS_STOP_PATTERN_DESCRIPTIVE_IDENTIFIER()
             mcuxClPsaDriver_Oracle_FreeKey(&key);
             return status;
         }
-        
+
         mcuxClKey_setLoadedKeySlot(&key, index);
     }
     else /* MCUXCLKEY_LOADSTATUS_MEMORY */
@@ -738,7 +763,7 @@ MCUX_CSSL_ANALYSIS_STOP_PATTERN_DESCRIPTIVE_IDENTIFIER()
             return status;
         }
         *key_buffer_length = mcuxClKey_getKeyContainerUsedSize(&key);
-        
+
         /* Unload the Key from slot after usage.
          * We have limited ELS Slots so unload the key at this point.
          * RFC blob of the key has been stored in key buffer which can
@@ -929,6 +954,15 @@ MCUX_CSSL_ANALYSIS_STOP_PATTERN_DESCRIPTIVE_IDENTIFIER()
     size_t shared_secret_size,
     size_t *shared_secret_length)
 {
+    uint16_t offsetN       = 0u;
+    uint8_t *pN            = NULL;
+    uint8_t *pT            = NULL;
+    uint8_t *pS            = NULL;
+    uint8_t *exp_buffer    = NULL;
+    uint32_t *tmp_buffer   = NULL;
+    uint32_t *pPkcWaBuffer = NULL;
+    uint8_t *pPkcWaBuffer8 = NULL;
+
     uint32_t pCpuWa[MCUXCLCORE_MAX(MCUXCLCORE_MAX(MCUXCLCORE_MAX(MCUXCLECC_MONTDH_KEYAGREEMENT_CURVE448_WACPU_SIZE,
                                 MCUXCLECC_MONTDH_KEYAGREEMENT_CURVE25519_WACPU_SIZE),
                             MCUXCLECC_POINTMULT_WACPU_SIZE),
@@ -1456,8 +1490,8 @@ MCUX_CSSL_ANALYSIS_STOP_PATTERN_DESCRIPTIVE_IDENTIFIER()
         ASSERT_CALLED_VOID_OR_EXIT(mcuxClPkc_Initialize(&pkc_state), mcuxClPkc_Initialize);
         pkc_initialized = true;
 
-        uint32_t *pPkcWaBuffer = (uint32_t *)(MCUXCLPKC_RAM_START_ADDRESS);
-        uint8_t *pPkcWaBuffer8 = (uint8_t *)pPkcWaBuffer;
+        pPkcWaBuffer  = (uint32_t *)(MCUXCLPKC_RAM_START_ADDRESS);
+        pPkcWaBuffer8 = (uint8_t *)pPkcWaBuffer;
 
         mcuxClSession_Descriptor_t session;
         ASSERT_CALLED_OR_EXIT(mcuxClSession_init(&session, pCpuWa, MCUXCLPSADRIVER_DHM_WACPU_SIZE, pPkcWaBuffer, pkcWaLength), mcuxClSession_init,
@@ -1495,12 +1529,12 @@ MCUX_CSSL_ANALYSIS_STOP_PATTERN_DESCRIPTIVE_IDENTIFIER()
         MCUXCLPKC_PS1_SETLENGTH(pkc_operand_size, pkc_operand_size);
 
         /* Import N. */
-        uint16_t offsetN                    = pOperands[MCUXCLPSADRIVER_DHM_OP_N] + MCUXCLPKC_WORDSIZE;
+        offsetN                             = pOperands[MCUXCLPSADRIVER_DHM_OP_N] + MCUXCLPKC_WORDSIZE;
         pOperands[MCUXCLPSADRIVER_DHM_OP_N] = offsetN;
 
-        uint8_t *pN = (uint8_t *)MCUXCLPKC_OFFSET2PTR(pOperands[MCUXCLPSADRIVER_DHM_OP_N]);
-        uint8_t *pT = (uint8_t *)MCUXCLPKC_OFFSET2PTR(pOperands[MCUXCLPSADRIVER_DHM_OP_T]);
-        uint8_t *pS = (uint8_t *)MCUXCLPKC_OFFSET2PTR(pOperands[MCUXCLPSADRIVER_DHM_OP_S]);
+        pN = (uint8_t *)MCUXCLPKC_OFFSET2PTR(pOperands[MCUXCLPSADRIVER_DHM_OP_N]);
+        pT = (uint8_t *)MCUXCLPKC_OFFSET2PTR(pOperands[MCUXCLPSADRIVER_DHM_OP_T]);
+        pS = (uint8_t *)MCUXCLPKC_OFFSET2PTR(pOperands[MCUXCLPSADRIVER_DHM_OP_S]);
 
         MCUXCLPKC_WAITFORFINISH();
         reverse_and_copy(pN, bufferSizeN, modulus, bytelen_n, bytelen_n);
@@ -1529,8 +1563,8 @@ MCUX_CSSL_ANALYSIS_STOP_PATTERN_DESCRIPTIVE_IDENTIFIER()
                                                          MCUXCLPSADRIVER_DHM_OP_S, MCUXCLPSADRIVER_DHM_OP_N),
                                    mcuxClPkc_Calc);
 
-        const uint8_t *exp_buffer = key_buffer + key_buffer_size - bytelen_e;
-        uint32_t *tmp_buffer      = mcuxClSession_allocateWords_cpuWa(&session, (bytelen_e / sizeof(uint32_t)) + 1u);
+        exp_buffer = (uint8_t *)key_buffer + key_buffer_size - bytelen_e;
+        tmp_buffer = mcuxClSession_allocateWords_cpuWa(&session, (bytelen_e / sizeof(uint32_t)) + 1u);
         if (tmp_buffer == NULL)
         {
             ret = PSA_ERROR_CORRUPTION_DETECTED;
@@ -1539,7 +1573,7 @@ MCUX_CSSL_ANALYSIS_STOP_PATTERN_DESCRIPTIVE_IDENTIFIER()
 
         MCUXCLPKC_WAITFORREADY();
         ASSERT_CALLED_OR_EXIT(
-            MCUXCLMATH_SECMODEXP(&session, exp_buffer, tmp_buffer, bytelen_e, MCUXCLPSADRIVER_DHM_OP_R,
+            MCUXCLMATH_SECMODEXP(&session, (const uint8_t *)exp_buffer, tmp_buffer, bytelen_e, MCUXCLPSADRIVER_DHM_OP_R,
                                  MCUXCLPSADRIVER_DHM_OP_X, MCUXCLPSADRIVER_DHM_OP_N, MCUXCLPSADRIVER_DHM_OP_TE,
                                  MCUXCLPSADRIVER_DHM_OP_T0, MCUXCLPSADRIVER_DHM_OP_T1, MCUXCLPSADRIVER_DHM_OP_T2,
                                  MCUXCLPSADRIVER_DHM_OP_T3),

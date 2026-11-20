@@ -23,7 +23,7 @@
  * Definitions
  ******************************************************************************/
 /*! @brief Middleware adapter version. */
-#define FSL_SDMMC_HOST_ADAPTER_VERSION (MAKE_VERSION(2U, 6U, 3U)) /*2.6.3*/
+#define FSL_SDMMC_HOST_ADAPTER_VERSION FSL_SDMMC_DRIVER_VERSION
 
 #if ((defined __DCACHE_PRESENT) && __DCACHE_PRESENT) || (defined FSL_FEATURE_HAS_L1CACHE && FSL_FEATURE_HAS_L1CACHE)
 #ifndef SDMMCHOST_ENABLE_CACHE_LINE_ALIGN_TRANSFER
@@ -318,9 +318,6 @@ static inline void SDMMCHOST_EnableHS400Mode(sdmmchost_t *host, bool enable)
     assert(SDMMCHOST_INSTANCE_SUPPORT_HS400(host) != 0);
 
     USDHC_EnableHS400Mode(host->hostController.base, enable);
-#else
-   (void)host;
-   (void)enable;
 #endif
 }
 
@@ -342,9 +339,6 @@ static inline void SDMMCHOST_EnableStrobeDll(sdmmchost_t *host, bool enable)
     {
         USDHC_EnableStrobeDLL(host->hostController.base, enable);
     }
-#else
-   (void)host;
-   (void)enable;
 #endif
 }
 

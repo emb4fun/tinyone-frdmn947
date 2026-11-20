@@ -63,14 +63,14 @@ static uint32_t LPCMP_GetInstance(LPCMP_Type *base)
      * (instance >= ARRAY_SIZE(s_lpcmpBases)) not covered. The peripheral base
      * address is always valid and checked by assert.
      */
-    for (instance = 0; instance < ARRAY_SIZE(s_lpcmpBases); instance++)
+    for (instance = 0; instance < ARRAY_SIZE(s_lpcmpBases); instance++) /* GCOVR_EXCL_BR_LINE */
     {
         /*
          * $Branch Coverage Justification$
          * (s_lpcmpBases[instance] != base) not covered. The peripheral base
          * address is always valid and checked by assert.
          */
-        if (MSDK_REG_SECURE_ADDR(s_lpcmpBases[instance]) == MSDK_REG_SECURE_ADDR(base))
+        if (MSDK_REG_NONSECURE_ADDR(s_lpcmpBases[instance]) == MSDK_REG_NONSECURE_ADDR(base)) /* GCOVR_EXCL_BR_LINE */
         {
             break;
         }
@@ -118,7 +118,9 @@ void LPCMP_Init(LPCMP_Type *base, const lpcmp_config_t *config)
 #if (defined(FSL_FEATURE_LPCMP_HAS_CCR0_CMP_STOP_EN) && FSL_FEATURE_LPCMP_HAS_CCR0_CMP_STOP_EN)
     /* CCR0 register. */
 #if defined(FSL_FEATURE_LPCMP_INSTANCE_SUPPORT_CCR0_CMP_STOP_ENn)
-    if (1U == FSL_FEATURE_LPCMP_INSTANCE_SUPPORT_CCR0_CMP_STOP_ENn(base))
+    /* MISRA C-2012 Rule 14.3 deviation: Platform-specific feature macro may create invariant condition */
+    /* MISRA C-2012 Rule 10.4: Ensure type consistency in comparison */
+    if (1U == (uint32_t)FSL_FEATURE_LPCMP_INSTANCE_SUPPORT_CCR0_CMP_STOP_ENn(base))
 #endif /* FSL_FEATURE_LPCMP_INSTANCE_SUPPORT_CCR0_CMP_STOP_ENn */
     {
         if (config->enableStopMode)

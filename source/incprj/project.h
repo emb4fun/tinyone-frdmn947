@@ -1,5 +1,5 @@
 /**************************************************************************
-*  Copyright (c) 2025 by Michael Fischer (www.emb4fun.de).
+*  Copyright (c) 2025-2026 by Michael Fischer (www.emb4fun.de).
 *  All rights reserved.
 *
 *  Redistribution and use in source and binary forms, with or without 
@@ -48,8 +48,8 @@
 #define PROJECT_NAME_LONG     "TinyONE Server"
 
 #define PROJECT_VER_MAJOR     1
-#define PROJECT_VER_MINOR_1   3
-#define PROJECT_VER_MINOR_2   1
+#define PROJECT_VER_MINOR_1   4
+#define PROJECT_VER_MINOR_2   0
 
 #define PROJECT_VER_NUMBER    ((PROJECT_VER_MAJOR * 100) + (PROJECT_VER_MINOR_1 * 10) + PROJECT_VER_MINOR_2)
 
@@ -95,7 +95,7 @@
 
 #define TASK_IP_WEB_TLS_SERVER_PRIORITY   64
 #define TASK_IP_WEB_TLS_SERVER_STK_SIZE   768
-#define TASK_IP_WEB_TLS_CLIENT_STK_SIZE   ((3*1024)+512)
+#define TASK_IP_WEB_TLS_CLIENT_STK_SIZE   ((4*1024)+512)
 
 #define TASK_IP_WEB_SERVER_PRIORITY       44
 #define TASK_IP_WEB_SERVER_STK_SIZE       768

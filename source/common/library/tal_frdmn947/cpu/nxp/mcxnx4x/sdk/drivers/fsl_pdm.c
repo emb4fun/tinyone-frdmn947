@@ -1,7 +1,6 @@
 /*
- * Copyright 2018-2020,2025 NXP
+ * Copyright 2018-2020,2025-2026 NXP
  * All rights reserved.
- *
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
@@ -9,6 +8,12 @@
 /* Component ID definition, used by tools. */
 #ifndef FSL_COMPONENT_ID
 #define FSL_COMPONENT_ID "platform.drivers.pdm"
+#endif
+
+#if defined(PDM_RSTS)
+#define PDM_RESETS_ARRAY PDM_RSTS
+#elif defined(PDM_RSTS_N)
+#define PDM_RESETS_ARRAY PDM_RSTS_N
 #endif
 
 /*******************************************************************************
@@ -41,6 +46,17 @@ static status_t PDM_ValidateSrcClockRate(uint32_t channelMask,
 static PDM_Type *const s_pdmBases[] = PDM_BASE_PTRS;
 /*!@brief PDM handle pointer */
 static pdm_handle_t *s_pdmHandle[ARRAY_SIZE(s_pdmBases)];
+/* IRQ number array */
+static const IRQn_Type s_pdmEventIRQ[] = PDM_Event_IRQS;
+#if !(defined FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ && FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ)
+static const IRQn_Type s_pdmErrorIRQ[] = PDM_Error_IRQS;
+#endif
+#if !(defined FSL_FEATURE_PDM_HAS_NO_HWVAD && FSL_FEATURE_PDM_HAS_NO_HWVAD)
+static const IRQn_Type s_pdmHwvadEventIRQ[] = PDM_HWVAD_Event_IRQS;
+#if !(defined FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ && FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ)
+static const IRQn_Type s_pdmHwvadErrorIRQ[] = PDM_HWVAD_Error_IRQS;
+#endif
+#endif
 #if !(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL)
 /* Clock name array */
 static const clock_ip_name_t s_pdmClock[] = PDM_CLOCKS;
@@ -52,6 +68,11 @@ static const clock_ip_name_t s_pdmClock[] = PDM_CLOCKS;
 static const clock_ip_name_t s_pdmFilterClock[] = PDM_FILTER_CLOCKS;
 #endif
 #endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
+
+#if defined(PDM_RESETS_ARRAY)
+/* Reset array */
+static const reset_ip_name_t s_pdmResets[] = PDM_RESETS_ARRAY;
+#endif
 
 /*! @brief Pointer to tx IRQ handler for each instance. */
 static pdm_isr_t s_pdmIsr;
@@ -69,7 +90,7 @@ uint32_t PDM_GetInstance(PDM_Type *base)
     /* Find the instance index from base address mappings. */
     for (instance = 0; instance < ARRAY_SIZE(s_pdmBases); instance++)
     {
-        if (MSDK_REG_SECURE_ADDR(s_pdmBases[instance]) == MSDK_REG_SECURE_ADDR(base))
+        if (MSDK_REG_NONSECURE_ADDR(s_pdmBases[instance]) == MSDK_REG_NONSECURE_ADDR(base))
         {
             break;
         }
@@ -82,7 +103,6 @@ uint32_t PDM_GetInstance(PDM_Type *base)
 
 /*!
  * brief PDM read fifo.
- * Note: This function support 16 bit only for IP version that only supports 16bit.
  *
  * param base PDM base pointer.
  * param startChannel start channel number.
@@ -96,6 +116,13 @@ void PDM_ReadFifo(
 {
     uint32_t i = 0, j = 0U;
     uint32_t *dataAddr = (uint32_t *)buffer;
+#if defined(FSL_FEATURE_PDM_FIFO_WIDTH) && (FSL_FEATURE_PDM_FIFO_WIDTH != 2U)
+    uint32_t shift = 0U;
+
+    assert((dataWidth >= 1U) && (dataWidth <= 4U));
+
+    shift = (4U - dataWidth) * 8U; /* 4/3/2/1 -> 0/8/16/24 */
+#endif
 
     for (i = 0U; i < size; i++)
     {
@@ -104,7 +131,7 @@ void PDM_ReadFifo(
 #if defined(FSL_FEATURE_PDM_FIFO_WIDTH) && (FSL_FEATURE_PDM_FIFO_WIDTH != 2U)
             if ((SIZE_MAX - j) >= startChannel)
             {
-                *dataAddr = base->DATACH[startChannel + j] >> (dataWidth == 4U ? 0U : 8U);
+                *dataAddr = base->DATACH[startChannel + j] >> shift;
                 dataAddr  = (uint32_t *)((uint32_t)dataAddr + dataWidth);
             }
             else
@@ -138,22 +165,8 @@ void PDM_ReadNonBlocking(PDM_Type *base, uint32_t startChannel, uint32_t channel
     {
         for (j = 0; j < channelNums; j++)
         {
-            uint32_t dataValue = base->DATACH[startChannel + j];
-
-            if (dataValue > INT16_MAX)
-            {
-                // Handle overflow: saturate to INT16_MAX or use an error handling mechanism
-                *buffer++ = INT16_MAX;
-            }
-            else if (dataValue < INT16_MIN)
-            {
-                // Handle underflow: saturate to INT16_MIN
-                *buffer++ = INT16_MIN;
-            }
-            else
-            {
-                *buffer++ = (int16_t)dataValue;
-            }
+            /* Extract lower 16 bits of valid data and interpret as signed int */
+            *buffer++ = (int16_t)(uint16_t)(base->DATACH[startChannel + j] & 0xFFFFU);
         }
     }
 }
@@ -171,7 +184,15 @@ static status_t PDM_ValidateSrcClockRate(uint32_t channelMask,
     {
         if (((channelMask >> i) & 0x01U) != 0U)
         {
-            enabledChannel++;
+            // Prevent potential addition overflow by capping at maximum value
+            if (enabledChannel < UINT32_MAX)
+            {
+                enabledChannel++;
+            }
+            else
+            {
+                enabledChannel = UINT32_MAX;
+            }
         }
     }
 
@@ -213,11 +234,52 @@ static status_t PDM_ValidateSrcClockRate(uint32_t channelMask,
     }
 
     /* validate the minimum clock divider */
-    /* 2U is for canculating k, 100U is for determing the specific float number of clock divider */
-    uint32_t leftSide = (regDiv * k) / 2U * 100U;
-    uint32_t rightSide = ((10U + factor * enabledChannel) * 100U / (8U * osr)) * k / 2U;
+    /* 2U is for calculating k, 100U is for determining the specific float number of clock divider */
 
-    if (leftSide < rightSide)
+    uint32_t leftSide = 0U; // Calculation: (regDiv * k) / 2U * 100U
+
+    // Prevent potential multiplication overflow
+    if (regDiv < (UINT32_MAX / k))
+    {
+        leftSide = (regDiv * k) / 2U * 100U;
+    }
+    else
+    {
+        return kStatus_Fail;
+    }
+
+    uint32_t rightSide = 0U; // Calculation: ((10U + factor * enabledChannel) * 100U / (8U * osr)) * k / 2U
+
+    // Prevent potential multiplication overflow
+    if ((10U + factor) < (UINT32_MAX / enabledChannel))
+    {
+        rightSide = 10U + factor * enabledChannel;
+    }
+    else
+    {
+        return kStatus_Fail;
+    }
+
+    if (rightSide < (UINT32_MAX / 100U))
+    {
+        rightSide *= 100U;
+        rightSide /= (8U * osr);
+    }
+    else
+    {
+        return kStatus_Fail;
+    }
+
+    if (rightSide < (UINT32_MAX / k))
+    {
+        rightSide *= k / 2U;
+    }
+    else
+    {
+        return kStatus_Fail;
+    }
+
+    if (leftSide < rightSide) // Compare calculated values to validate clock divider
     {
         return kStatus_Fail;
     }
@@ -347,13 +409,22 @@ void PDM_Init(PDM_Type *base, const pdm_config_t *config)
     assert(config != NULL);
     assert(config->fifoWatermark <= PDM_FIFO_CTRL_FIFOWMK_MASK);
 
+#if (!(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL)) \
+    || defined(PDM_RESETS_ARRAY)
+    uint32_t instance = PDM_GetInstance(base);
+#endif
+
 #if !(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL)
     /* Enable the PDM clock */
-    CLOCK_EnableClock(s_pdmClock[PDM_GetInstance(base)]);
+    CLOCK_EnableClock(s_pdmClock[instance]);
 #if defined(FSL_PDM_HAS_FILTER_CLOCK_GATE) && FSL_PDM_HAS_FILTER_CLOCK_GATE
-    CLOCK_EnableClock(s_pdmFilterClock[PDM_GetInstance(base)]);
+    CLOCK_EnableClock(s_pdmFilterClock[instance]);
 #endif
 #endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
+
+#if defined(PDM_RESETS_ARRAY)
+    RESET_ReleasePeripheralReset(s_pdmResets[instance]);
+#endif
 
     /* Enable the module and disable the interface/all channel */
     base->CTRL_1 &=
@@ -546,10 +617,12 @@ void PDM_TransferCreateHandle(PDM_Type *base, pdm_handle_t *handle, pdm_transfer
 {
     assert(handle != NULL);
 
+    uint32_t instance = PDM_GetInstance(base);
+
     /* Zero the handle */
     (void)memset(handle, 0, sizeof(*handle));
 
-    s_pdmHandle[PDM_GetInstance(base)] = handle;
+    s_pdmHandle[instance] = handle;
 
     handle->callback  = callback;
     handle->userData  = userData;
@@ -559,10 +632,10 @@ void PDM_TransferCreateHandle(PDM_Type *base, pdm_handle_t *handle, pdm_transfer
     s_pdmIsr = PDM_TransferHandleIRQ;
 
     /* Enable RX event IRQ */
-    (void)EnableIRQ(PDM_EVENT_IRQn);
+    (void)EnableIRQ(s_pdmEventIRQ[instance]);
 #if !(defined FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ && FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ)
     /* Enable FIFO error IRQ */
-    (void)EnableIRQ(PDM_ERROR_IRQn);
+    (void)EnableIRQ(s_pdmErrorIRQ[instance]);
 #endif
 }
 
@@ -630,17 +703,8 @@ void PDM_TransferAbortReceive(PDM_Type *base, pdm_handle_t *handle)
     handle->queueUser   = 0;
 }
 
-/*!
- * brief Tx interrupt handler.
- *
- * param base PDM base pointer.
- * param handle Pointer to the pdm_handle_t structure.
- */
-void PDM_TransferHandleIRQ(PDM_Type *base, pdm_handle_t *handle)
+static void PDM_TransferHandleErrorIRQ(PDM_Type *base, pdm_handle_t *handle)
 {
-    assert(handle != NULL);
-
-#if (defined FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ && FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ)
     uint32_t status = 0U;
 
 #if (defined(FSL_FEATURE_PDM_HAS_STATUS_LOW_FREQ) && (FSL_FEATURE_PDM_HAS_STATUS_LOW_FREQ == 1U))
@@ -653,6 +717,7 @@ void PDM_TransferHandleIRQ(PDM_Type *base, pdm_handle_t *handle)
         }
     }
 #endif
+
     status = PDM_GetFifoStatus(base);
     if (status != 0U)
     {
@@ -674,6 +739,20 @@ void PDM_TransferHandleIRQ(PDM_Type *base, pdm_handle_t *handle)
         }
     }
 #endif
+}
+
+/*!
+ * brief Tx interrupt handler.
+ *
+ * param base PDM base pointer.
+ * param handle Pointer to the pdm_handle_t structure.
+ */
+void PDM_TransferHandleIRQ(PDM_Type *base, pdm_handle_t *handle)
+{
+    assert(handle != NULL);
+
+#if (defined FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ && FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ)
+    PDM_TransferHandleErrorIRQ(base, handle);
 #endif
 
     /* Handle transfer */
@@ -928,6 +1007,7 @@ void PDM_SetHwvadZeroCrossDetectorConfig(PDM_Type *base, const pdm_hwvad_zero_cr
  * param enable true is enable, false is disable.
  * retval None.
  */
+#if !(defined FSL_FEATURE_PDM_HAS_NO_HWVAD && FSL_FEATURE_PDM_HAS_NO_HWVAD)
 void PDM_EnableHwvadInterruptCallback(PDM_Type *base, pdm_hwvad_callback_t vadCallback, void *userData, bool enable)
 {
     uint32_t instance = PDM_GetInstance(base);
@@ -935,11 +1015,11 @@ void PDM_EnableHwvadInterruptCallback(PDM_Type *base, pdm_hwvad_callback_t vadCa
     if (enable)
     {
         PDM_EnableHwvadInterrupts(base, (uint32_t)kPDM_HwvadErrorInterruptEnable | (uint32_t)kPDM_HwvadInterruptEnable);
-        NVIC_ClearPendingIRQ(PDM_HWVAD_EVENT_IRQn);
-        (void)EnableIRQ(PDM_HWVAD_EVENT_IRQn);
+        NVIC_ClearPendingIRQ(s_pdmHwvadEventIRQ[instance]);
+        (void)EnableIRQ(s_pdmHwvadEventIRQ[instance]);
 #if !(defined FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ && FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ)
-        NVIC_ClearPendingIRQ(PDM_HWVAD_ERROR_IRQn);
-        (void)EnableIRQ(PDM_HWVAD_ERROR_IRQn);
+        NVIC_ClearPendingIRQ(s_pdmHwvadErrorIRQ[instance]);
+        (void)EnableIRQ(s_pdmHwvadErrorIRQ[instance]);
 #endif
         s_pdm_hwvad_notification[instance].callback = vadCallback;
         s_pdm_hwvad_notification[instance].userData = userData;
@@ -948,39 +1028,87 @@ void PDM_EnableHwvadInterruptCallback(PDM_Type *base, pdm_hwvad_callback_t vadCa
     {
         PDM_DisableHwvadInterrupts(base,
                                    (uint32_t)kPDM_HwvadErrorInterruptEnable | (uint32_t)kPDM_HwvadInterruptEnable);
-        (void)DisableIRQ(PDM_HWVAD_EVENT_IRQn);
+        (void)DisableIRQ(s_pdmHwvadEventIRQ[instance]);
 #if !(defined FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ && FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ)
-        (void)DisableIRQ(PDM_HWVAD_ERROR_IRQn);
-        NVIC_ClearPendingIRQ(PDM_HWVAD_ERROR_IRQn);
+        (void)DisableIRQ(s_pdmHwvadErrorIRQ[instance]);
+        NVIC_ClearPendingIRQ(s_pdmHwvadErrorIRQ[instance]);
 #endif
         s_pdm_hwvad_notification[instance].callback = NULL;
         s_pdm_hwvad_notification[instance].userData = NULL;
-        NVIC_ClearPendingIRQ(PDM_HWVAD_EVENT_IRQn);
+        NVIC_ClearPendingIRQ(s_pdmHwvadEventIRQ[instance]);
     }
 }
+#endif
 
-#if (defined PDM)
-void PDM_HWVAD_EVENT_DriverIRQHandler(void);
-void PDM_HWVAD_EVENT_DriverIRQHandler(void)
+#endif
+
+static void PDM_EventHandleIRQ(uint32_t instance)
 {
-    if ((PDM_GetHwvadInterruptStatusFlags(PDM) & (uint32_t)kPDM_HwvadStatusVoiceDetectFlag) != 0U)
+    assert(instance < ARRAY_SIZE(s_pdmBases));
+    assert(s_pdmHandle[instance] != NULL);
+    assert(s_pdmIsr != NULL);
+
+    s_pdmIsr(s_pdmBases[instance], s_pdmHandle[instance]);
+}
+
+#if !(defined FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ && FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ)
+static void PDM_ErrorHandleIRQ(uint32_t instance)
+{
+    assert(instance < ARRAY_SIZE(s_pdmBases));
+    assert(s_pdmHandle[instance] != NULL);
+
+    PDM_TransferHandleErrorIRQ(s_pdmBases[instance], s_pdmHandle[instance]);
+}
+#endif
+
+#if !(defined(FSL_FEATURE_PDM_HAS_NO_HWVAD) && FSL_FEATURE_PDM_HAS_NO_HWVAD)
+static void PDM_HwvadEventHandleIRQ(uint32_t instance)
+{
+    assert(instance < ARRAY_SIZE(s_pdmBases));
+
+    if ((PDM_GetHwvadInterruptStatusFlags(s_pdmBases[instance]) & (uint32_t)kPDM_HwvadStatusVoiceDetectFlag) != 0U)
     {
-        PDM_ClearHwvadInterruptStatusFlags(PDM, (uint32_t)kPDM_HwvadStatusVoiceDetectFlag);
-        if (s_pdm_hwvad_notification[0].callback != NULL)
+        PDM_ClearHwvadInterruptStatusFlags(s_pdmBases[instance], (uint32_t)kPDM_HwvadStatusVoiceDetectFlag);
+        if (s_pdm_hwvad_notification[instance].callback != NULL)
         {
-            s_pdm_hwvad_notification[0].callback(kStatus_PDM_HWVAD_VoiceDetected, s_pdm_hwvad_notification[0].userData);
+            s_pdm_hwvad_notification[instance].callback(kStatus_PDM_HWVAD_VoiceDetected,
+                                                        s_pdm_hwvad_notification[instance].userData);
         }
     }
 #if (defined FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ && FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ)
     else
     {
-        PDM_ClearHwvadInterruptStatusFlags(PDM, (uint32_t)kPDM_HwvadStatusInputSaturation);
-        if (s_pdm_hwvad_notification[0].callback != NULL)
+        PDM_ClearHwvadInterruptStatusFlags(s_pdmBases[instance], (uint32_t)kPDM_HwvadStatusInputSaturation);
+        if (s_pdm_hwvad_notification[instance].callback != NULL)
         {
-            s_pdm_hwvad_notification[0].callback(kStatus_PDM_HWVAD_Error, s_pdm_hwvad_notification[0].userData);
+            s_pdm_hwvad_notification[instance].callback(kStatus_PDM_HWVAD_Error,
+                                                        s_pdm_hwvad_notification[instance].userData);
         }
     }
 #endif
+}
+
+#if !(defined FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ && FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ)
+static void PDM_HwvadErrorHandleIRQ(uint32_t instance)
+{
+    assert(instance < ARRAY_SIZE(s_pdmBases));
+
+    PDM_ClearHwvadInterruptStatusFlags(s_pdmBases[instance], (uint32_t)kPDM_HwvadStatusInputSaturation);
+    if (s_pdm_hwvad_notification[instance].callback != NULL)
+    {
+        s_pdm_hwvad_notification[instance].callback(kStatus_PDM_HWVAD_Error,
+                                                    s_pdm_hwvad_notification[instance].userData);
+    }
+}
+#endif
+#endif
+
+#if !(defined(FSL_FEATURE_PDM_HAS_NO_HWVAD) && FSL_FEATURE_PDM_HAS_NO_HWVAD)
+#if defined(PDM)
+void PDM_HWVAD_EVENT_DriverIRQHandler(void);
+void PDM_HWVAD_EVENT_DriverIRQHandler(void)
+{
+    PDM_HwvadEventHandleIRQ(0U);
     SDK_ISR_EXIT_BARRIER;
 }
 
@@ -988,11 +1116,7 @@ void PDM_HWVAD_EVENT_DriverIRQHandler(void)
 void PDM_HWVAD_ERROR_DriverIRQHandler(void);
 void PDM_HWVAD_ERROR_DriverIRQHandler(void)
 {
-    PDM_ClearHwvadInterruptStatusFlags(PDM, (uint32_t)kPDM_HwvadStatusInputSaturation);
-    if (s_pdm_hwvad_notification[0].callback != NULL)
-    {
-        s_pdm_hwvad_notification[0].callback(kStatus_PDM_HWVAD_Error, s_pdm_hwvad_notification[0].userData);
-    }
+    PDM_HwvadErrorHandleIRQ(0U);
     SDK_ISR_EXIT_BARRIER;
 }
 #endif
@@ -1003,8 +1127,70 @@ void PDM_HWVAD_ERROR_DriverIRQHandler(void)
 void PDM_EVENT_DriverIRQHandler(void);
 void PDM_EVENT_DriverIRQHandler(void)
 {
-    assert(s_pdmHandle[0] != NULL);
-    s_pdmIsr(PDM, s_pdmHandle[0]);
+    PDM_EventHandleIRQ(0U);
     SDK_ISR_EXIT_BARRIER;
 }
+
+#if !(defined FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ && FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ)
+void PDM_ERROR_DriverIRQHandler(void);
+void PDM_ERROR_DriverIRQHandler(void)
+{
+    PDM_ErrorHandleIRQ(0U);
+    SDK_ISR_EXIT_BARRIER;
+}
+#endif
+#endif
+
+#if defined(AUDIO__MICFIL) || defined(AUDIO_MICFIL)
+void AUDIO_PDM_EVENT_DriverIRQHandler(void);
+void AUDIO_PDM_EVENT_DriverIRQHandler(void)
+{
+    PDM_EventHandleIRQ(0U);
+    SDK_ISR_EXIT_BARRIER;
+}
+
+#if !(defined FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ && FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ)
+void AUDIO_PDM_ERROR_DriverIRQHandler(void);
+void AUDIO_PDM_ERROR_DriverIRQHandler(void)
+{
+    PDM_ErrorHandleIRQ(0U);
+    SDK_ISR_EXIT_BARRIER;
+}
+#endif
+#endif
+
+#if defined(WAKE__MICFIL) || defined(WAKE_MICFIL)
+void WAKE_PDM_EVENT_DriverIRQHandler(void);
+void WAKE_PDM_EVENT_DriverIRQHandler(void)
+{
+    PDM_EventHandleIRQ(1U);
+    SDK_ISR_EXIT_BARRIER;
+}
+
+#if !(defined FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ && FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ)
+void WAKE_PDM_ERROR_DriverIRQHandler(void);
+void WAKE_PDM_ERROR_DriverIRQHandler(void)
+{
+    PDM_ErrorHandleIRQ(1U);
+    SDK_ISR_EXIT_BARRIER;
+}
+#endif
+
+#if !(defined(FSL_FEATURE_PDM_HAS_NO_HWVAD) && FSL_FEATURE_PDM_HAS_NO_HWVAD)
+void WAKE_PDM_HWVAD_EVENT_DriverIRQHandler(void);
+void WAKE_PDM_HWVAD_EVENT_DriverIRQHandler(void)
+{
+    PDM_HwvadEventHandleIRQ(1U);
+    SDK_ISR_EXIT_BARRIER;
+}
+
+#if !(defined FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ && FSL_FEATURE_PDM_HAS_NO_INDEPENDENT_ERROR_IRQ)
+void WAKE_PDM_HWVAD_ERROR_DriverIRQHandler(void);
+void WAKE_PDM_HWVAD_ERROR_DriverIRQHandler(void)
+{
+    PDM_HwvadErrorHandleIRQ(1U);
+    SDK_ISR_EXIT_BARRIER;
+}
+#endif
+#endif
 #endif

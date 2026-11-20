@@ -1,13 +1,10 @@
 /*
- * Copyright 2018-2025 NXP
+ * Copyright 2018-2026 NXP
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
 #include "fsl_i3c.h"
-#if !(defined(FSL_FEATURE_I3C_HAS_NO_RESET) && FSL_FEATURE_I3C_HAS_NO_RESET)
-#include "fsl_reset.h"
-#endif
 #include <stdlib.h>
 #include <string.h>
 
@@ -76,16 +73,6 @@ enum _i3c_transfer_states
     kWaitForCompletionState,
 };
 
-/*!
- * @brief Used for conversion between `uint8_t*` and `uint32_t`.
- */
-typedef union i3c_puint8_to_u32
-{
-    uint8_t *puint8;
-    uint32_t u32;
-    const uint8_t *cpuint8;
-} i3c_puint8_to_u32_t;
-
 /*
  * <! Structure definition for variables that passed as parameters in I3C_RunTransferStateMachine.
  * The structure is private.
@@ -113,6 +100,13 @@ typedef struct _i3c_transfer_handleIrq_param
     uint32_t enabledInts;
 } i3c_slave_handleIrq_param_t;
 
+typedef struct _i3c_i2c_timing_preset_entry
+{
+    i3c_legacy_i2c_speed_mode_t speed;
+    i3c_master_src_clk_t srcClk;
+    i3c_timing_t timing;
+} i3c_i2c_timing_preset_entry_t;
+
 /*******************************************************************************
  * Prototypes
  ******************************************************************************/
@@ -136,7 +130,7 @@ IRQn_Type const kI3cIrqs[] = I3C_IRQS;
 static clock_ip_name_t const kI3cClocks[] = I3C_CLOCKS;
 #endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
 
-#if !(defined(FSL_FEATURE_I3C_HAS_NO_RESET) && FSL_FEATURE_I3C_HAS_NO_RESET)
+#if defined(I3C_RSTS)
 /*! @brief Pointers to I3C resets for each instance. */
 static const reset_ip_name_t kI3cResets[] = I3C_RSTS;
 #endif
@@ -155,6 +149,109 @@ i3c_slave_isr_t s_i3cSlaveIsr;
 
 /*! @brief Pointers to slave handles for each instance. */
 void *s_i3cSlaveHandle[ARRAY_SIZE(kI3cBases)];
+
+static const i3c_i2c_timing_preset_entry_t s_i2cTimingPresets[] = {
+    /*
+     * 24 MHz Fast-mode, Set#1: PPBAUD=1, ODBAUD=15, I2CBAUD=0.
+     * Spec   : SCL<=400 kHz, tHIGH>=600 ns, tLOW>=1300 ns, tSU_STA>=600 ns, tHD_STA>=600 ns,
+     *          tSU_STO>=600 ns, tHD_DAT>=0 ns, tSU_DAT>=100 ns.
+     * Config : SCL=375 kHz, tHIGH=1333.3 ns, tLOW=1333.3 ns, tSU_STA=643.3 ns, tHD_STA=690 ns,
+     *          tSU_STO=623.3 ns, tHD_DAT=633.3 ns, tSU_DAT=700 ns.
+     */
+    {
+        kI3C_LegacyI2CFastMode,
+        kI3C_MasterSrcClk24M,
+        {
+            .ppBaud   = 1U,
+            .ppLow    = 0U,
+            .odBaud   = 15U,
+            .odHighPP = false,
+            .i2cBaud  = 0U,
+#if defined(FSL_FEATURE_I3C_HAS_I2CBLOW) && FSL_FEATURE_I3C_HAS_I2CBLOW
+            .i2cBlow = 0U,
+#endif
+#if defined(FSL_FEATURE_I3C_HAS_I2CHS) && FSL_FEATURE_I3C_HAS_I2CHS
+            .i2cHs = false,
+#endif
+            .actualI2cBaud = 375000U,
+        },
+    },
+    /*
+     * 25 MHz Fast-mode preset, Set#1: PPBAUD=2, ODBAUD=10, I2CBAUD=0.
+     * Spec   : SCL<=400 kHz, tHIGH>=600 ns, tLOW>=1300 ns, tSU_STA>=600 ns, tHD_STA>=600 ns,
+     *          tSU_STO>=600 ns, tHD_DAT=-, tSU_DAT>=100 ns.
+     * Config : SCL=378.79 kHz, tHIGH=1320 ns, tLOW=1320 ns, tSU_STA=660 ns, tHD_STA=660 ns,
+     *          tSU_STO=640 ns, tHD_DAT=650 ns, tSU_DAT=670 ns.
+     */
+    {
+        kI3C_LegacyI2CFastMode,
+        kI3C_MasterSrcClk25M,
+        {
+            .ppBaud   = 2U,
+            .ppLow    = 0U,
+            .odBaud   = 10U,
+            .odHighPP = false,
+            .i2cBaud  = 0U,
+#if defined(FSL_FEATURE_I3C_HAS_I2CBLOW) && FSL_FEATURE_I3C_HAS_I2CBLOW
+            .i2cBlow = 0U,
+#endif
+#if defined(FSL_FEATURE_I3C_HAS_I2CHS) && FSL_FEATURE_I3C_HAS_I2CHS
+            .i2cHs = false,
+#endif
+            .actualI2cBaud = 378790U,
+        },
+    },
+    /*
+     * 24 MHz Fast-mode Plus preset, Set#1: PPBAUD=0, ODBAUD=13, I2CBAUD=0.
+     * Spec   : SCL<=1000 kHz, tHIGH>=260 ns, tLOW>=500 ns, tSU_STA>=260 ns, tHD_STA>=260 ns,
+     *          tSU_STO>=260 ns, tHD_DAT=-, tSU_DAT>=50 ns.
+     * Config : SCL=857.14 kHz, tHIGH=583.3 ns, tLOW=583.3 ns, tSU_STA=310 ns, tHD_STA=273.3 ns,
+     *          tSU_STO=290 ns, tHD_DAT=300 ns, tSU_DAT=283.3 ns.
+     */
+    {
+        kI3C_LegacyI2CFastModePlus,
+        kI3C_MasterSrcClk24M,
+        {
+            .ppBaud   = 0U,
+            .ppLow    = 0U,
+            .odBaud   = 13U,
+            .odHighPP = false,
+            .i2cBaud  = 0U,
+#if defined(FSL_FEATURE_I3C_HAS_I2CBLOW) && FSL_FEATURE_I3C_HAS_I2CBLOW
+            .i2cBlow = 0U,
+#endif
+#if defined(FSL_FEATURE_I3C_HAS_I2CHS) && FSL_FEATURE_I3C_HAS_I2CHS
+            .i2cHs = false,
+#endif
+            .actualI2cBaud = 857140U,
+        },
+    },
+    /*
+     * 25 MHz Fast-mode Plus preset, Set#1: PPBAUD=0, ODBAUD=13, I2CBAUD=0.
+     * Spec   : SCL<=1000 kHz, tHIGH>=260 ns, tLOW>=500 ns, tSU_STA>=260 ns, tHD_STA>=260 ns,
+     *          tSU_STO>=260 ns, tHD_DAT=-, tSU_DAT>=50 ns.
+     * Config : SCL=892.86 kHz, tHIGH=560 ns, tLOW=560 ns, tSU_STA=300 ns, tHD_STA=260 ns,
+     *          tSU_STO=280 ns, tHD_DAT=290 ns, tSU_DAT=270 ns.
+     */
+    {
+        kI3C_LegacyI2CFastModePlus,
+        kI3C_MasterSrcClk25M,
+        {
+            .ppBaud   = 0U,
+            .ppLow    = 0U,
+            .odBaud   = 13U,
+            .odHighPP = false,
+            .i2cBaud  = 0U,
+#if defined(FSL_FEATURE_I3C_HAS_I2CBLOW) && FSL_FEATURE_I3C_HAS_I2CBLOW
+            .i2cBlow = 0U,
+#endif
+#if defined(FSL_FEATURE_I3C_HAS_I2CHS) && FSL_FEATURE_I3C_HAS_I2CHS
+            .i2cHs = false,
+#endif
+            .actualI2cBaud = 892860U,
+        },
+    },
+};
 
 /*!
  * @brief introduce function I3C_TransferStateMachineIBIWonState.
@@ -332,7 +429,7 @@ uint32_t I3C_GetInstance(I3C_Type *base)
     uint32_t instance;
     for (instance = 0; instance < ARRAY_SIZE(kI3cBases); ++instance)
     {
-        if (MSDK_REG_SECURE_ADDR(kI3cBases[instance]) == MSDK_REG_SECURE_ADDR(base))
+        if (MSDK_REG_NONSECURE_ADDR(kI3cBases[instance]) == MSDK_REG_NONSECURE_ADDR(base))
         {
             break;
         }
@@ -492,6 +589,8 @@ static status_t I3C_MasterWaitForTxReady(I3C_Type *base, uint8_t byteCounts)
     {
         /* Get the number of words in the tx fifo and compute empty slots. */
         I3C_MasterGetFifoCounts(base, NULL, &txCount);
+        /* Bypass MSG issue, this should not happen. */
+        assert(txFifoSize >= txCount);
         txCount = txFifoSize - txCount;
 
         /* Check for error flags. */
@@ -653,11 +752,11 @@ status_t I3C_SlaveCheckAndClearError(I3C_Type *base, uint32_t status)
 
 static status_t I3C_SlaveWaitForTxReady(I3C_Type *base)
 {
+    size_t txFifoSize =
+        2UL << ((base->SCAPABILITIES & I3C_SCAPABILITIES_FIFOTX_MASK) >> I3C_SCAPABILITIES_FIFOTX_SHIFT);
     uint32_t errStatus;
     status_t result;
     size_t txCount;
-    size_t txFifoSize =
-        2UL << ((base->SCAPABILITIES & I3C_SCAPABILITIES_FIFOTX_MASK) >> I3C_SCAPABILITIES_FIFOTX_SHIFT);
 
 #if I3C_RETRY_TIMES
     uint32_t waitTimes = I3C_RETRY_TIMES;
@@ -666,6 +765,8 @@ static status_t I3C_SlaveWaitForTxReady(I3C_Type *base)
     {
         /* Get the number of words in the tx fifo and compute empty slots. */
         I3C_SlaveGetFifoCounts(base, NULL, &txCount);
+        /* Bypass MSG issue, this should not happen. */
+        assert(txFifoSize >= txCount);
         txCount = txFifoSize - txCount;
 
         /* Check for error flags. */
@@ -708,6 +809,53 @@ static status_t I3C_MasterEmitStop(I3C_Type *base, bool waitIdle)
     result = I3C_MasterWaitForCtrlDone(base, waitIdle);
 
     return result;
+}
+
+static uint32_t I3C_CalcErrorRatio(uint32_t curFreq, uint32_t targetFreq)
+{
+    uint32_t diff  = (curFreq > targetFreq) ? (curFreq - targetFreq) : (targetFreq - curFreq);
+    uint64_t ratio = ((uint64_t)diff * 100U) / targetFreq;
+
+    return (ratio > 1000U) ? 1000U : (uint32_t)ratio;
+}
+
+static bool I3C_RateInTolerance(uint32_t curFreq, uint32_t targetFreq)
+{
+    return (targetFreq == 0U) || (I3C_CalcErrorRatio(curFreq, targetFreq) <= FSL_I3C_ERROR_RATE_MAX);
+}
+
+/*!
+ * brief Get prevalidated timing values for supported I2C speed.
+ *
+ * param[in]  speed   I2C Speed mode.
+ * param[in]  srcClk  FCLK source clock.
+ * param[out] timing  Prevalidated timing values. Valid when kStatus_Success is returned.
+ * return kStatus_Success A supported preset timing is found.
+ *         kStatus_Fail The requested timing is not supported.
+ */
+status_t I3C_MasterGetI2CPresetTiming(i3c_legacy_i2c_speed_mode_t speed,
+                                      i3c_master_src_clk_t srcClk,
+                                      i3c_timing_t *timing)
+{
+    size_t idx;
+
+    assert(timing != NULL);
+
+    if (speed == kI3C_LegacyI2CStandardMode)
+    {
+        return kStatus_Fail;
+    }
+
+    for (idx = 0U; idx < ARRAY_SIZE(s_i2cTimingPresets); idx++)
+    {
+        if ((s_i2cTimingPresets[idx].speed == speed) && (s_i2cTimingPresets[idx].srcClk == srcClk))
+        {
+            *timing = s_i2cTimingPresets[idx].timing;
+            return kStatus_Success;
+        }
+    }
+
+    return kStatus_Fail;
 }
 
 /*!
@@ -799,8 +947,7 @@ void I3C_GetDefaultConfig(i3c_config_t *config)
  */
 void I3C_Init(I3C_Type *base, const i3c_config_t *config, uint32_t sourceClock_Hz)
 {
-#if !(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) || \
-    !(defined(FSL_FEATURE_I3C_HAS_NO_RESET) && FSL_FEATURE_I3C_HAS_NO_RESET)
+#if !(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) || defined(I3C_RSTS)
     uint32_t instance = I3C_GetInstance(base);
 #endif
     uint32_t configValue;
@@ -810,7 +957,7 @@ void I3C_Init(I3C_Type *base, const i3c_config_t *config, uint32_t sourceClock_H
     CLOCK_EnableClock(kI3cClocks[instance]);
 #endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
 
-#if !(defined(FSL_FEATURE_I3C_HAS_NO_RESET) && FSL_FEATURE_I3C_HAS_NO_RESET)
+#if defined(I3C_RSTS)
     /* Reset the I3C module */
     RESET_PeripheralReset(kI3cResets[instance]);
 #endif
@@ -821,9 +968,9 @@ void I3C_Init(I3C_Type *base, const i3c_config_t *config, uint32_t sourceClock_H
         base->MDYNADDR |= I3C_MDYNADDR_DADDR(config->masterDynamicAddress) | I3C_MDYNADDR_DAVALID_MASK;
     }
 
-    base->MCONFIG = I3C_MCONFIG_MSTENA(config->enableMaster) | I3C_MCONFIG_DISTO(config->disableTimeout) |
-                    I3C_MCONFIG_HKEEP(config->hKeep) | I3C_MCONFIG_ODSTOP(config->enableOpenDrainStop) |
-                    I3C_MCONFIG_ODHPP(config->enableOpenDrainHigh);
+    base->MCONFIG = I3C_MCONFIG_MSTENA(config->enableMaster) | (config->disableTimeout ? I3C_MCONFIG_DISTO_MASK : 0UL) |
+                    I3C_MCONFIG_HKEEP(config->hKeep) | (config->enableOpenDrainStop ? I3C_MCONFIG_ODSTOP_MASK : 0UL) |
+                    (config->enableOpenDrainHigh ? I3C_MCONFIG_ODHPP_MASK : 0UL);
 
 #if defined(FSL_FEATURE_I3C_HAS_START_SCL_DELAY) && FSL_FEATURE_I3C_HAS_START_SCL_DELAY
     base->MCONFIG_EXT =
@@ -835,7 +982,8 @@ void I3C_Init(I3C_Type *base, const i3c_config_t *config, uint32_t sourceClock_H
     I3C_MasterSetBaudRate(base, &config->baudRate_Hz, sourceClock_Hz);
 
 #if !(defined(FSL_FEATURE_I3C_HAS_NO_SCONFIG_BAMATCH) && FSL_FEATURE_I3C_HAS_NO_SCONFIG_BAMATCH)
-    assert((config->slowClock_Hz >= 1000000U) || (config->slowClock_Hz == 0U));
+    assert(((config->slowClock_Hz >= 1000000U) && (config->slowClock_Hz <= 256000000U)) ||
+           (config->slowClock_Hz == 0U));
 
     uint8_t matchCount;
     /* Set as (slowClk(MHz) - 1) to generate 1us clock cycle. Controller uses it to count 100us timeout. Target uses it
@@ -843,7 +991,7 @@ void I3C_Init(I3C_Type *base, const i3c_config_t *config, uint32_t sourceClock_H
        value of 0 would not give a correct match indication. */
     if (config->slowClock_Hz != 0U)
     {
-        matchCount = (uint8_t)(config->slowClock_Hz / 1000000UL) - 1U;
+        matchCount = (uint8_t)(((config->slowClock_Hz / 1000000UL) - 1U) & 0xFFU);
         matchCount = (matchCount == 0U) ? 1U : matchCount;
     }
     else
@@ -883,17 +1031,19 @@ void I3C_Init(I3C_Type *base, const i3c_config_t *config, uint32_t sourceClock_H
 #if !(defined(FSL_FEATURE_I3C_HAS_NO_SCONFIG_BAMATCH) && FSL_FEATURE_I3C_HAS_NO_SCONFIG_BAMATCH)
                    I3C_SCONFIG_BAMATCH(matchCount) |
 #endif
-                   I3C_SCONFIG_OFFLINE(config->offline) |
+                   (config->offline ? I3C_SCONFIG_OFFLINE_MASK : 0U) |
 #if !(defined(FSL_FEATURE_I3C_HAS_NO_SCONFIG_IDRAND) && FSL_FEATURE_I3C_HAS_NO_SCONFIG_IDRAND)
-                   I3C_SCONFIG_IDRAND(config->enableRandomPart) |
+                   (config->enableRandomPart ? I3C_SCONFIG_IDRAND_MASK : 0U) |
 #endif
 #if defined(FSL_FEATURE_I3C_HAS_HDROK) && FSL_FEATURE_I3C_HAS_HDROK
                    I3C_SCONFIG_HDROK((0U != (config->hdrMode & (uint8_t)kI3C_HDRModeDDR)) ? 1U : 0U) |
 #else
                    I3C_SCONFIG_DDROK((0U != (config->hdrMode & (uint8_t)kI3C_HDRModeDDR)) ? 1U : 0U) |
 #endif
-                   I3C_SCONFIG_S0IGNORE(config->ignoreS0S1Error) | I3C_SCONFIG_MATCHSS(config->matchSlaveStartStop) |
-                   I3C_SCONFIG_NACK(config->nakAllRequest) | I3C_SCONFIG_SLVENA(config->enableSlave);
+                   (config->ignoreS0S1Error ? I3C_SCONFIG_S0IGNORE_MASK : 0U) |
+                   (config->matchSlaveStartStop ? I3C_SCONFIG_MATCHSS_MASK : 0U) |
+                   (config->nakAllRequest ? I3C_SCONFIG_NACK_MASK : 0U) |
+                   I3C_SCONFIG_SLVENA(config->enableSlave ? 1U : 0U);
 
     base->SVENDORID &= ~I3C_SVENDORID_VID_MASK;
     base->SVENDORID |= I3C_SVENDORID_VID(config->vendorID);
@@ -963,8 +1113,7 @@ void I3C_MasterGetDefaultConfig(i3c_master_config_t *masterConfig)
  */
 void I3C_MasterInit(I3C_Type *base, const i3c_master_config_t *masterConfig, uint32_t sourceClock_Hz)
 {
-#if !(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) || \
-    !(defined(FSL_FEATURE_I3C_HAS_NO_RESET) && FSL_FEATURE_I3C_HAS_NO_RESET)
+#if !(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) || defined(I3C_RSTS)
     uint32_t instance = I3C_GetInstance(base);
 #endif
 
@@ -973,13 +1122,14 @@ void I3C_MasterInit(I3C_Type *base, const i3c_master_config_t *masterConfig, uin
     CLOCK_EnableClock(kI3cClocks[instance]);
 #endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
 
-#if !(defined(FSL_FEATURE_I3C_HAS_NO_RESET) && FSL_FEATURE_I3C_HAS_NO_RESET)
+#if defined(I3C_RSTS)
     /* Reset the I3C module */
     RESET_PeripheralReset(kI3cResets[instance]);
 #endif
-    base->MCONFIG = I3C_MCONFIG_MSTENA(masterConfig->enableMaster) | I3C_MCONFIG_DISTO(masterConfig->disableTimeout) |
-                    I3C_MCONFIG_HKEEP(masterConfig->hKeep) | I3C_MCONFIG_ODSTOP(masterConfig->enableOpenDrainStop) |
-                    I3C_MCONFIG_ODHPP(masterConfig->enableOpenDrainHigh);
+    base->MCONFIG =
+        I3C_MCONFIG_MSTENA(masterConfig->enableMaster) | (masterConfig->disableTimeout ? I3C_MCONFIG_DISTO_MASK : 0UL) |
+        I3C_MCONFIG_HKEEP(masterConfig->hKeep) | (masterConfig->enableOpenDrainStop ? I3C_MCONFIG_ODSTOP_MASK : 0UL) |
+        (masterConfig->enableOpenDrainHigh ? I3C_MCONFIG_ODHPP_MASK : 0UL);
 
 #if defined(FSL_FEATURE_I3C_HAS_START_SCL_DELAY) && FSL_FEATURE_I3C_HAS_START_SCL_DELAY
     base->MCONFIG_EXT = I3C_MCONFIG_EXT_I3C_CAS_DEL(masterConfig->startSclDelay) |
@@ -991,7 +1141,8 @@ void I3C_MasterInit(I3C_Type *base, const i3c_master_config_t *masterConfig, uin
     I3C_MasterSetBaudRate(base, &masterConfig->baudRate_Hz, sourceClock_Hz);
 
 #if !(defined(FSL_FEATURE_I3C_HAS_NO_SCONFIG_BAMATCH) && FSL_FEATURE_I3C_HAS_NO_SCONFIG_BAMATCH)
-    assert((masterConfig->slowClock_Hz >= 1000000U) || (masterConfig->slowClock_Hz == 0U));
+    assert(((masterConfig->slowClock_Hz >= 1000000U) && (masterConfig->slowClock_Hz <= 256000000U)) ||
+           (masterConfig->slowClock_Hz == 0U));
 
     uint32_t configValue;
     uint8_t matchCount;
@@ -1002,7 +1153,7 @@ void I3C_MasterInit(I3C_Type *base, const i3c_master_config_t *masterConfig, uin
     {
         /* Set as (slowClk(MHz) - 1) to generate 1us clock cycle for 100us timeout. Note: Use BAMATCH = 1 to generate
            1us clock cycle if slow clock is 1MHz. The value of 0 would not give a correct match indication. */
-        matchCount = (uint8_t)(masterConfig->slowClock_Hz / 1000000UL) - 1U;
+        matchCount = (uint8_t)(((masterConfig->slowClock_Hz / 1000000UL) - 1U) & 0xFFU);
         matchCount = (matchCount == 0U) ? 1U : matchCount;
 
         configValue = base->SCONFIG & I3C_SCONFIG_BAMATCH_MASK;
@@ -1021,40 +1172,8 @@ void I3C_MasterInit(I3C_Type *base, const i3c_master_config_t *masterConfig, uin
 i3c_master_state_t I3C_MasterGetState(I3C_Type *base)
 {
     uint32_t masterState = (base->MSTATUS & I3C_MSTATUS_STATE_MASK) >> I3C_MSTATUS_STATE_SHIFT;
-    i3c_master_state_t returnCode;
 
-    switch (masterState)
-    {
-        case (uint32_t)kI3C_MasterStateIdle:
-            returnCode = kI3C_MasterStateIdle;
-            break;
-        case (uint32_t)kI3C_MasterStateSlvReq:
-            returnCode = kI3C_MasterStateSlvReq;
-            break;
-        case (uint32_t)kI3C_MasterStateMsgSdr:
-            returnCode = kI3C_MasterStateMsgSdr;
-            break;
-        case (uint32_t)kI3C_MasterStateNormAct:
-            returnCode = kI3C_MasterStateNormAct;
-            break;
-        case (uint32_t)kI3C_MasterStateDdr:
-            returnCode = kI3C_MasterStateDdr;
-            break;
-        case (uint32_t)kI3C_MasterStateDaa:
-            returnCode = kI3C_MasterStateDaa;
-            break;
-        case (uint32_t)kI3C_MasterStateIbiAck:
-            returnCode = kI3C_MasterStateIbiAck;
-            break;
-        case (uint32_t)kI3C_MasterStateIbiRcv:
-            returnCode = kI3C_MasterStateIbiRcv;
-            break;
-        default:
-            returnCode = kI3C_MasterStateIdle;
-            break;
-    }
-
-    return returnCode;
+    return (i3c_master_state_t)masterState;
 }
 
 /*!
@@ -1069,7 +1188,7 @@ void I3C_MasterDeinit(I3C_Type *base)
 {
     uint32_t idx = I3C_GetInstance(base);
 
-#if !(defined(FSL_FEATURE_I3C_HAS_NO_RESET) && FSL_FEATURE_I3C_HAS_NO_RESET)
+#if defined(I3C_RSTS)
     /* Reset the I3C module */
     RESET_PeripheralReset(kI3cResets[idx]);
 #endif
@@ -1083,23 +1202,16 @@ void I3C_MasterDeinit(I3C_Type *base)
     s_i3cMasterHandle[idx] = NULL;
 }
 
-static uint32_t I3C_CalcErrorRatio(uint32_t curFreq, uint32_t desiredFreq)
-{
-    if (curFreq > desiredFreq)
-    {
-        return (curFreq - desiredFreq) * 100UL / desiredFreq;
-    }
-    else
-    {
-        return (desiredFreq - curFreq) * 100UL / desiredFreq;
-    }
-}
-
 /*!
  * brief Sets the I3C bus frequency for master transactions.
  *
  * The I3C master is automatically disabled and re-enabled as necessary to configure the baud
  * rate. Do not call this function during a transfer, or the transfer is aborted.
+ *
+ * note On devices affected by I3C errata ERR053429, an SDR read with PPBAUD < 2 can lose the
+ *       last received byte when the RxFIFO fills before the CPU/DMA services it. For safe SDR
+ *       reads, request a push-pull baud that yields PPBAUD > 1, or guarantee the CPU/DMA drains
+ *       the RxFIFO fast enough to avoid a Full event.
  *
  * param base The I3C peripheral base address.
  * param baudRate_Hz Pointer to structure of requested bus frequency in Hertz.
@@ -1117,6 +1229,7 @@ void I3C_MasterSetBaudRate(I3C_Type *base, const i3c_baudrate_hz_t *baudRate_Hz,
     uint32_t i3cODBaudMax_HZ = i3cODBaud_HZ / 10U + i3cODBaud_HZ; /* max is 1.1*i3cODBaud_HZ */
     uint32_t i2cBaud_HZ      = baudRate_Hz->i2cBaud;
     uint32_t i3cPPLow_Ns, i3cOdLow_Ns;
+    uint64_t temp;
     bool isODHigh = (0U != (base->MCONFIG & I3C_MCONFIG_ODHPP_MASK)) ? true : false;
 
     /* Find out the div to generate target freq */
@@ -1146,7 +1259,12 @@ void I3C_MasterSetBaudRate(I3C_Type *base, const i3c_baudrate_hz_t *baudRate_Hz,
             div++;
         }
         odBaud = div - 2UL;
-        freq   = (2UL * freq) / div;
+        /* ODBAUD=0 is reserved/undefined behavior. */
+        if (odBaud < 1UL)
+        {
+            odBaud = 1UL;
+        }
+        freq = (2UL * freq) / div;
     }
     else
     {
@@ -1158,20 +1276,35 @@ void I3C_MasterSetBaudRate(I3C_Type *base, const i3c_baudrate_hz_t *baudRate_Hz,
             div++;
         }
         odBaud = div - 1UL;
+        /* ODBAUD=0 is reserved/undefined behavior. */
+        if (odBaud < 1UL)
+        {
+            odBaud = 1UL;
+        }
         freq /= div;
     }
 
-    i3cOdLow_Ns = (odBaud + 1UL) * i3cPPLow_Ns;
+    assert(odBaud < FSL_I3C_ODBAUD_DIV_MAX);
+    assert(ppBaud < FSL_I3C_PPBAUD_DIV_MAX);
+
+    temp = ((uint64_t)odBaud + 1UL) * (uint64_t)i3cPPLow_Ns;
+    assert(temp <= UINT32_MAX);
+    i3cOdLow_Ns = (uint32_t)temp;
 
     /* i2cFreq = odFreq / (I2CBAUD + 1), 0 <= I2CBAUD <= 7 (I2CBAUD need << 1 in register) */
     /* i2cFreq = NSEC_PER_SEC / (I2CBAUD + 1)*i3cOdLow_Ns */
-    divEven  = (sourceClock_Hz / i2cBaud_HZ) / (2UL * (ppBaud + 1UL) * (odBaud + 1UL));
-    divEven  = divEven == 0UL ? 1UL : divEven;
-    errRate0 = I3C_CalcErrorRatio((uint32_t)(NSEC_PER_SEC / (2UL * divEven * i3cOdLow_Ns)), i2cBaud_HZ);
+    divEven = (sourceClock_Hz / i2cBaud_HZ) / (2UL * (ppBaud + 1UL) * (odBaud + 1UL));
+    divEven = divEven == 0UL ? 1UL : divEven;
 
-    divOdd   = ((sourceClock_Hz / i2cBaud_HZ) / ((ppBaud + 1UL) * (odBaud + 1UL) - 1UL)) / 2UL;
-    divOdd   = divOdd == 0UL ? 1UL : divOdd;
-    errRate1 = I3C_CalcErrorRatio((uint32_t)(NSEC_PER_SEC / ((2UL * divOdd + 1UL) * i3cOdLow_Ns)), i2cBaud_HZ);
+    temp = 2UL * (uint64_t)divEven * (uint64_t)i3cOdLow_Ns;
+    assert(temp <= UINT32_MAX);
+    errRate0 = I3C_CalcErrorRatio((uint32_t)(NSEC_PER_SEC / (uint32_t)temp), i2cBaud_HZ);
+
+    divOdd = ((sourceClock_Hz / i2cBaud_HZ) / ((ppBaud + 1UL) * (odBaud + 1UL) - 1UL)) / 2UL;
+    divOdd = divOdd == 0UL ? 1UL : divOdd;
+    temp   = ((2UL * (uint64_t)divOdd + 1UL) * (uint64_t)i3cOdLow_Ns);
+    assert(temp <= UINT32_MAX);
+    errRate1 = I3C_CalcErrorRatio((uint32_t)(NSEC_PER_SEC / (uint32_t)temp), i2cBaud_HZ);
 
     if (errRate0 < FSL_I3C_ERROR_RATE_MAX || errRate1 < FSL_I3C_ERROR_RATE_MAX)
     {
@@ -1185,8 +1318,201 @@ void I3C_MasterSetBaudRate(I3C_Type *base, const i3c_baudrate_hz_t *baudRate_Hz,
     }
 
     base->MCONFIG = (base->MCONFIG & ~(I3C_MCONFIG_PPBAUD_MASK | I3C_MCONFIG_PPLOW_MASK | I3C_MCONFIG_ODBAUD_MASK |
-                                       I3C_MCONFIG_I2CBAUD_MASK)) |
-                    I3C_MCONFIG_PPBAUD(ppBaud) | I3C_MCONFIG_ODBAUD(odBaud) | I3C_MCONFIG_I2CBAUD(i2cBaud);
+                                       I3C_MCONFIG_ODHPP_MASK | I3C_MCONFIG_I2CBAUD_MASK)) |
+                    I3C_MCONFIG_PPBAUD(ppBaud) | I3C_MCONFIG_PPLOW(0U) | I3C_MCONFIG_ODBAUD(odBaud) |
+                    (isODHigh ? I3C_MCONFIG_ODHPP_MASK : 0UL) | I3C_MCONFIG_I2CBAUD(i2cBaud);
+}
+
+/*!
+ * brief Calculate timing from desired baud rates.
+ *
+ * param[in]  baudRate        Desired baud rates and bus configuration.
+ * param[in]  sourceClock_Hz  Master peripheral clock (FCLK) in Hz.
+ * param[out] timing          I3C timing register field values.
+ * return kStatus_Success Target rate is achieved.
+ *        kStatus_Fail Target rate isn't achieved.
+ */
+status_t I3C_MasterCalcTiming(const i3c_master_baudrate_config_t *baudRate,
+                              uint32_t sourceClock_Hz,
+                              i3c_timing_t *timing)
+{
+    assert(baudRate != NULL);
+    assert(timing != NULL);
+    /* Pure bus doesn't handle I2C. */
+    assert((baudRate->busMode != kI3C_PureBus) || (baudRate->i2cBaud == 0U));
+    /* Limited bus doesn't consider spike filter. */
+    assert((baudRate->busMode != kI3C_LimitedBus) || (!baudRate->enableODHPP));
+    /* FCLK below 2^31 makes sourceClock_Hz + baud/2 sum within uint32 (no overflow). */
+    assert((sourceClock_Hz != 0U) && (sourceClock_Hz <= 0x7FFFFFFFU));
+
+    bool odHPP      = baudRate->enableODHPP;
+    uint8_t i2cBaud = 0U;
+    uint32_t ppBaud, ppLow, odBaud;
+    uint32_t ppHigh;
+    uint32_t ppPeriod;
+
+    /* Set PPBAUD and PPLOW. */
+    if (baudRate->busMode == kI3C_MixedFastBus)
+    {
+        /* PP HIGH = (ppBaud+1)/FCLK <= 41 ns. */
+        uint32_t ppHighMax = (uint32_t)((41ULL * (uint64_t)sourceClock_Hz) / 1000000000ULL);
+        ppBaud             = MIN(((ppHighMax == 0U) ? 1U : ppHighMax) - 1U, 15U);
+        ppHigh             = ppBaud + 1U;
+        /* Low FCLK lets even ppBaud = 0 make PP HIGH exceed the 50 ns spike filter. */
+        if ((uint64_t)ppHigh * 1000000000ULL > 50ULL * (uint64_t)sourceClock_Hz)
+        {
+            return kStatus_Fail;
+        }
+        /* Extends PP low period to reach the target PP frequency. */
+        if (baudRate->i3cPushPullBaud != 0U)
+        {
+            ppPeriod = (sourceClock_Hz + baudRate->i3cPushPullBaud / 2U) / baudRate->i3cPushPullBaud;
+            ppPeriod = MAX(ppPeriod, 2U * ppHigh);
+            ppLow    = MIN(ppPeriod - 2U * ppHigh, 15U);
+        }
+        else
+        {
+            ppLow = 0U;
+        }
+    }
+    else if (baudRate->i3cPushPullBaud != 0U)
+    {
+        /* Pure/Limited Bus: PPBAUD from the target PP frequency, PPLOW fine-tunes. */
+        ppPeriod = MAX((sourceClock_Hz + baudRate->i3cPushPullBaud / 2U) / baudRate->i3cPushPullBaud, 2U);
+        ppBaud   = MIN(ppPeriod / 2U - 1U, 15U);
+        ppHigh   = ppBaud + 1U;
+        ppLow    = (ppPeriod > 2U * ppHigh) ? MIN(ppPeriod - 2U * ppHigh, 15U) : 0U;
+    }
+    else
+    {
+        ppBaud = 0U;
+        ppLow  = 0U;
+        ppHigh = 1U;
+    }
+
+    /* Set ODBAUD. ODHPP(1): OD period = ppHigh*(odBaud+2). ODHPP(0): OD period = 2*ppHigh*(odBaud+1). */
+    if (baudRate->i3cOpenDrainBaud != 0U)
+    {
+        uint32_t mul   = odHPP ? 1U : 2U;
+        uint32_t off   = odHPP ? 2U : 1U;
+        uint64_t denom = (uint64_t)mul * ppHigh * baudRate->i3cOpenDrainBaud;
+        uint64_t div   = ((uint64_t)sourceClock_Hz + denom / 2U) / denom;
+        odBaud         = (div > off) ? (uint32_t)MIN(div - off, 255U) : 0U;
+    }
+    else
+    {
+        odBaud = 1U;
+    }
+
+    /* Enforce OD low period = (odBaud+1)*ppHigh >= 200 ns. */
+    uint32_t minCycles = (sourceClock_Hz + 4999999U) / 5000000U;
+    uint32_t minOdBaud = (minCycles + ppHigh - 1U) / ppHigh - 1U;
+    odBaud             = MAX(odBaud, minOdBaud);
+    if (odBaud >= FSL_I3C_ODBAUD_DIV_MAX)
+    {
+        return kStatus_Fail;
+    }
+    /* ODBAUD >= 1, 0 is RM-forbidden. */
+    odBaud = MAX(odBaud, 1U);
+
+    /* Set I2CBAUD. I2C period = (i2cBaud+2) * (odBaud+1) * ppHigh. */
+    if (baudRate->i2cBaud != 0U)
+    {
+        assert(ppHigh <= 16U);
+        uint32_t odHalfCycles  = (odBaud + 1U) * ppHigh;
+        uint64_t targetPeriods = (uint64_t)sourceClock_Hz / ((uint64_t)baudRate->i2cBaud * odHalfCycles);
+        /* Cap at 14: I2CBAUD=15 is unusable. */
+        uint32_t value = (targetPeriods < 2U) ? 0U : (uint32_t)MIN(targetPeriods - 2U, 14U);
+
+        if (value < 14U)
+        {
+            assert(odHalfCycles <= 4096U);
+            uint32_t freqA = sourceClock_Hz / ((value + 2U) * odHalfCycles);
+            uint32_t freqB = sourceClock_Hz / ((value + 3U) * odHalfCycles);
+            uint32_t errA  = I3C_CalcErrorRatio(freqA, baudRate->i2cBaud);
+            uint32_t errB  = I3C_CalcErrorRatio(freqB, baudRate->i2cBaud);
+            if (errB < errA)
+            {
+                value++;
+            }
+        }
+        i2cBaud = (uint8_t)value;
+    }
+
+    timing->ppBaud   = (uint8_t)ppBaud;
+    timing->ppLow    = (uint8_t)ppLow;
+    timing->odBaud   = (uint8_t)odBaud;
+    timing->odHighPP = odHPP;
+    timing->i2cBaud  = i2cBaud;
+#if defined(FSL_FEATURE_I3C_HAS_I2CBLOW) && FSL_FEATURE_I3C_HAS_I2CBLOW
+    timing->i2cBlow = 0U;
+#endif
+#if defined(FSL_FEATURE_I3C_HAS_I2CHS) && FSL_FEATURE_I3C_HAS_I2CHS
+    /* Enable push-pull SCL to reach higher I2C speeds. */
+    timing->i2cHs = (baudRate->i2cBaud > 1000000U);
+#endif
+
+    /* Back-calculate the frequencies the written fields actually produce. */
+    timing->actualPpBaud = sourceClock_Hz / (2U * ppHigh + ppLow);
+    if (odHPP)
+    {
+        timing->actualOdBaud = sourceClock_Hz / (ppHigh * (odBaud + 2U));
+    }
+    else
+    {
+        timing->actualOdBaud = sourceClock_Hz / (2U * ppHigh * (odBaud + 1U));
+    }
+
+    if (baudRate->i2cBaud != 0U)
+    {
+        timing->actualI2cBaud = sourceClock_Hz / (((uint32_t)i2cBaud + 2U) * (odBaud + 1U) * ppHigh);
+    }
+    else
+    {
+        timing->actualI2cBaud = 0U;
+    }
+
+    bool inTolerance = I3C_RateInTolerance(timing->actualPpBaud, baudRate->i3cPushPullBaud) &&
+                       I3C_RateInTolerance(timing->actualOdBaud, baudRate->i3cOpenDrainBaud) &&
+                       I3C_RateInTolerance(timing->actualI2cBaud, baudRate->i2cBaud);
+
+    return inTolerance ? kStatus_Success : kStatus_Fail;
+}
+
+/*!
+ * brief Set I3C timing parameters.
+ *
+ * param base    I3C peripheral base address.
+ * param timing  Pre-calculated timing values.
+ */
+void I3C_MasterSetTiming(I3C_Type *base, const i3c_timing_t *timing)
+{
+    assert(timing != NULL);
+    /* ODBAUD=0 is forbidden. */
+    assert(timing->odBaud >= 1U);
+
+    uint32_t mask = I3C_MCONFIG_PPBAUD_MASK | I3C_MCONFIG_PPLOW_MASK | I3C_MCONFIG_ODBAUD_MASK |
+                    I3C_MCONFIG_ODHPP_MASK | I3C_MCONFIG_I2CBAUD_MASK;
+    uint32_t val  = I3C_MCONFIG_PPBAUD(timing->ppBaud) | I3C_MCONFIG_PPLOW(timing->ppLow) |
+                    I3C_MCONFIG_ODBAUD(timing->odBaud) | (timing->odHighPP ? I3C_MCONFIG_ODHPP_MASK : 0UL) |
+                    I3C_MCONFIG_I2CBAUD(timing->i2cBaud);
+
+    base->MCONFIG = (base->MCONFIG & ~mask) | val;
+
+#if (defined(FSL_FEATURE_I3C_HAS_I2CBLOW) && FSL_FEATURE_I3C_HAS_I2CBLOW) || \
+    (defined(FSL_FEATURE_I3C_HAS_I2CHS) && FSL_FEATURE_I3C_HAS_I2CHS)
+    mask = 0UL;
+    val  = 0UL;
+#if defined(FSL_FEATURE_I3C_HAS_I2CBLOW) && FSL_FEATURE_I3C_HAS_I2CBLOW
+    mask |= I3C_MCONFIG_EXT_I2CBLOW_MASK;
+    val |= I3C_MCONFIG_EXT_I2CBLOW(timing->i2cBlow);
+#endif
+#if defined(FSL_FEATURE_I3C_HAS_I2CHS) && FSL_FEATURE_I3C_HAS_I2CHS
+    mask |= I3C_MCONFIG_EXT_I2CHS_MASK;
+    val |= (timing->i2cHs ? I3C_MCONFIG_EXT_I2CHS_MASK : 0UL);
+#endif
+    base->MCONFIG_EXT = (base->MCONFIG_EXT & ~mask) | val;
+#endif
 }
 
 /*!
@@ -1372,7 +1698,7 @@ void I3C_MasterGetIBIRules(I3C_Type *base, i3c_register_ibi_addr_t *ibiRule)
     for (uint32_t count = 0; count < ARRAY_SIZE(ibiRule->address); count++)
     {
         ibiRule->address[count] =
-            (uint8_t)(ruleValue >> (count * I3C_MIBIRULES_ADDR1_SHIFT)) & I3C_MIBIRULES_ADDR0_MASK;
+            (uint8_t)((ruleValue >> (count * I3C_MIBIRULES_ADDR1_SHIFT)) & I3C_MIBIRULES_ADDR0_MASK);
     }
 
     ibiRule->ibiHasPayload = (0U == (ruleValue & I3C_MIBIRULES_NOBYTE_MASK));
@@ -1509,9 +1835,8 @@ status_t I3C_MasterReceive(I3C_Type *base, void *rxBuff, size_t rxSize, uint32_t
  */
 status_t I3C_MasterSend(I3C_Type *base, const void *txBuff, size_t txSize, uint32_t flags)
 {
-    i3c_puint8_to_u32_t buf;
-    buf.cpuint8     = (const uint8_t *)((const void *)txBuff);
-    status_t result = kStatus_Success;
+    const uint8_t *buffer = (const uint8_t *)txBuff;
+    status_t result       = kStatus_Success;
     bool enableWord = ((flags & (uint32_t)kI3C_TransferWordsFlag) == (uint32_t)kI3C_TransferWordsFlag) ? true : false;
     uint8_t byteCounts = enableWord ? 2U : 1U;
 
@@ -1536,27 +1861,27 @@ status_t I3C_MasterSend(I3C_Type *base, const void *txBuff, size_t txSize, uint3
         {
             if (enableWord)
             {
-                base->MWDATAH = (uint32_t)buf.cpuint8[1] << 8UL | (uint32_t)buf.cpuint8[0];
+                base->MWDATAH = ((uint32_t)buffer[1] << 8UL) | (uint32_t)buffer[0];
             }
             else
             {
-                base->MWDATAB = *buf.cpuint8;
+                base->MWDATAB = *buffer;
             }
         }
         else
         {
             if (enableWord)
             {
-                base->MWDATAHE = (uint32_t)buf.cpuint8[1] << 8UL | (uint32_t)buf.cpuint8[0];
+                base->MWDATAHE = ((uint32_t)buffer[1] << 8UL) | (uint32_t)buffer[0];
             }
             else
             {
-                base->MWDATABE = *buf.cpuint8;
+                base->MWDATABE = *buffer;
             }
         }
 
-        buf.u32 = buf.u32 + byteCounts;
-        txSize  = txSize - byteCounts;
+        buffer += byteCounts;
+        txSize -= byteCounts;
     }
 
     result = I3C_MasterWaitForComplete(base, false);
@@ -1604,6 +1929,9 @@ status_t I3C_MasterProcessDAASpecifiedBaudrate(I3C_Type *base,
     uint32_t devCount     = 0;
     uint8_t rxSize        = 0;
     bool mctrlDone        = false;
+#if I3C_RETRY_TIMES
+    uint32_t waitTimes = I3C_RETRY_TIMES;
+#endif
     i3c_baudrate_hz_t baudRate_Hz;
     uint32_t errStatus;
     uint32_t status;
@@ -1656,6 +1984,7 @@ status_t I3C_MasterProcessDAASpecifiedBaudrate(I3C_Type *base,
 
             if (rxCount != 0U)
             {
+                assert(rxSize < sizeof(rxBuffer));
                 rxBuffer[rxSize++] = (uint8_t)(base->MRDATAB & I3C_MRDATAB_VALUE_MASK);
             }
 
@@ -1663,6 +1992,9 @@ status_t I3C_MasterProcessDAASpecifiedBaudrate(I3C_Type *base,
             {
                 I3C_MasterClearStatusFlags(base, (uint32_t)kI3C_MasterControlDoneFlag);
                 mctrlDone = true;
+#if I3C_RETRY_TIMES
+                waitTimes = I3C_RETRY_TIMES;
+#endif
             }
         }
         else if ((I3C_MasterGetState(base) == kI3C_MasterStateDaa) &&
@@ -1693,11 +2025,22 @@ status_t I3C_MasterProcessDAASpecifiedBaudrate(I3C_Type *base,
             /* Ready to handle next device. */
             mctrlDone = false;
             rxSize    = 0;
+#if I3C_RETRY_TIMES
+            waitTimes = I3C_RETRY_TIMES;
+#endif
         }
         else
         {
             /* Intentional empty */
         }
+
+#if I3C_RETRY_TIMES
+        if (--waitTimes == 0U)
+        {
+            result = kStatus_I3C_Timeout;
+            break;
+        }
+#endif
     } while ((status & (uint32_t)kI3C_MasterCompleteFlag) != (uint32_t)kI3C_MasterCompleteFlag);
 
     /* Master stops DAA if slave device number exceeds the prepared address number. */
@@ -1821,6 +2164,8 @@ static status_t I3C_MasterStartPolling(
  */
 static status_t I3C_MasterTransferPrepare(I3C_Type *base, i3c_master_transfer_t *transfer)
 {
+    assert(!(0U != (transfer->flags & (uint32_t)kI3C_TransferRxAutoTermFlag)) || transfer->dataSize <= 0xFFU);
+
     status_t result           = kStatus_Success;
     i3c_direction_t direction = transfer->direction;
     uint32_t subaddressRemaining;
@@ -1828,7 +2173,7 @@ static status_t I3C_MasterTransferPrepare(I3C_Type *base, i3c_master_transfer_t 
 
     if (transfer->busType != kI3C_TypeI3CDdr)
     {
-        direction = (0UL != transfer->subaddressSize) ? kI3C_Write : transfer->direction;
+        direction = (0UL != transfer->subaddressSize) ? (i3c_direction_t)kI3C_Write : transfer->direction;
     }
     assert(!((0UL != (transfer->flags & (uint32_t)kI3C_TransferNoStartFlag)) && (direction == kI3C_Read)));
 
@@ -1885,7 +2230,8 @@ static status_t I3C_MasterTransferPrepare(I3C_Type *base, i3c_master_transfer_t 
         /* Need to send repeated start if switching directions to read. */
         if ((transfer->busType != kI3C_TypeI3CDdr) && (transfer->direction == kI3C_Read))
         {
-            tSize = (0U != (transfer->flags & (uint32_t)kI3C_TransferRxAutoTermFlag)) ? (uint8_t)transfer->dataSize : 0U;
+            tSize =
+                (0U != (transfer->flags & (uint32_t)kI3C_TransferRxAutoTermFlag)) ? (uint8_t)transfer->dataSize : 0U;
             result = I3C_MasterStartPolling(base, transfer->busType, transfer->slaveAddress, kI3C_Read, tSize);
         }
     }
@@ -2082,7 +2428,7 @@ static void I3C_TransferStateMachineIBIWonState(I3C_Type *base,
         {
             handle->callback.ibiCallback(base, handle, kI3C_IbiNormal, kI3C_IbiDataBuffNeed);
         }
-        uint8_t tempData = (uint8_t)base->MRDATAB;
+        uint8_t tempData = (uint8_t)(base->MRDATAB & 0xFFU);
         if (handle->ibiBuff != NULL)
         {
             handle->ibiBuff[handle->ibiPayloadSize++] = tempData;
@@ -2092,10 +2438,10 @@ static void I3C_TransferStateMachineIBIWonState(I3C_Type *base,
     }
     else if (0UL != (stateParams->status & (uint32_t)kI3C_MasterCompleteFlag))
     {
-        handle->ibiType             = I3C_GetIBIType(base);
-        handle->ibiAddress          = I3C_GetIBIAddress(base);
-        stateParams->state_complete = true;
-        stateParams->result         = kStatus_I3C_IBIWon;
+        handle->ibiType     = I3C_GetIBIType(base);
+        handle->ibiAddress  = I3C_GetIBIAddress(base);
+        stateParams->result = kStatus_I3C_IBIWon;
+        handle->state       = (uint8_t)kStopState;
     }
     else
     {
@@ -2118,7 +2464,7 @@ static void I3C_TransferStateMachineSendCommandState(I3C_Type *base,
     if (handle->transfer.subaddressSize > 1U)
     {
         handle->transfer.subaddressSize--;
-        base->MWDATAB = (uint8_t)((handle->transfer.subaddress) >> (8U * handle->transfer.subaddressSize));
+        base->MWDATAB = (uint8_t)(((handle->transfer.subaddress) >> (8U * handle->transfer.subaddressSize)) & 0xFFU);
     }
     else if (handle->transfer.subaddressSize == 1U)
     {
@@ -2126,7 +2472,8 @@ static void I3C_TransferStateMachineSendCommandState(I3C_Type *base,
 
         if ((handle->transfer.direction == kI3C_Read) || (0UL == handle->transfer.dataSize))
         {
-            base->MWDATABE = (uint8_t)((handle->transfer.subaddress) >> (8U * handle->transfer.subaddressSize));
+            base->MWDATABE =
+                (uint8_t)(((handle->transfer.subaddress) >> (8U * handle->transfer.subaddressSize)) & 0xFFU);
 
             if (handle->transfer.busType != kI3C_TypeI3CDdr)
             {
@@ -2149,7 +2496,8 @@ static void I3C_TransferStateMachineSendCommandState(I3C_Type *base,
         {
             /* Next state, transfer data. */
             handle->state = (uint8_t)kTransferDataState;
-            base->MWDATAB = (uint8_t)((handle->transfer.subaddress) >> (8U * handle->transfer.subaddressSize));
+            base->MWDATAB =
+                (uint8_t)(((handle->transfer.subaddress) >> (8U * handle->transfer.subaddressSize)) & 0xFFU);
         }
     }
     else
@@ -2190,8 +2538,16 @@ static void I3C_TransferStateMachineTransferDataState(I3C_Type *base,
                                                       i3c_master_state_machine_param_t *stateParams)
 {
     assert(NULL != base && NULL != handle && NULL != stateParams);
+    assert((uintptr_t)(uint8_t *)handle->transfer.data < UINT32_MAX);
 
-    i3c_puint8_to_u32_t dataBuff;
+    uint8_t *dataBuff = (uint8_t *)handle->transfer.data;
+
+    if (handle->remainingBytes == 0UL)
+    {
+        handle->state = (uint8_t)kWaitForCompletionState;
+        return;
+    }
+
     if (handle->transfer.direction == kI3C_Write)
     {
         /* Make sure there is room in the tx fifo. */
@@ -2202,23 +2558,13 @@ static void I3C_TransferStateMachineTransferDataState(I3C_Type *base,
         }
 
         /* Put byte to send in fifo. */
-        dataBuff.puint8 = (uint8_t *)handle->transfer.data;
-        if (handle->transfer.dataSize > 1U)
+        if (handle->remainingBytes > 1U)
         {
-            base->MWDATAB = *dataBuff.puint8;
+            base->MWDATAB = *dataBuff;
         }
         else
         {
-            base->MWDATABE = *dataBuff.puint8;
-        }
-        dataBuff.u32 = dataBuff.u32 + 1U;
-        (handle->transfer.dataSize)--;
-        handle->transfer.data = (void *)(dataBuff.puint8);
-
-        /* Move to stop when the transfer is done. */
-        if (--handle->remainingBytes == 0UL)
-        {
-            handle->state = (uint8_t)kWaitForCompletionState;
+            base->MWDATABE = *dataBuff;
         }
     }
     else
@@ -2238,21 +2584,26 @@ static void I3C_TransferStateMachineTransferDataState(I3C_Type *base,
         }
 
         /* Read byte from fifo. */
-        dataBuff.puint8       = (uint8_t *)handle->transfer.data;
-        *dataBuff.puint8      = (uint8_t)base->MRDATAB;
-        dataBuff.u32          = dataBuff.u32 + 1U;
-        handle->transfer.data = (void *)(dataBuff.puint8);
+        *dataBuff = (uint8_t)(base->MRDATAB & 0xFFU);
 
-        /* Move to stop when the transfer is done. */
-        if (--handle->remainingBytes == 0UL)
-        {
-            handle->state = (uint8_t)kWaitForCompletionState;
-        }
-
-        if ((handle->rxTermOps == kI3C_RxTermLastByte) && (handle->remainingBytes == 1UL))
+        if ((handle->rxTermOps == kI3C_RxTermLastByte) && (handle->remainingBytes == 2UL))
         {
             base->MCTRL |= I3C_MCTRL_RDTERM(1UL);
         }
+    }
+
+    dataBuff++;
+    handle->transfer.data = (void *)dataBuff;
+
+    /* Move to stop when the transfer is done. */
+    if (handle->remainingBytes <= 1UL)
+    {
+        handle->remainingBytes = 0UL;
+        handle->state          = (uint8_t)kWaitForCompletionState;
+    }
+    else
+    {
+        handle->remainingBytes--;
     }
 }
 
@@ -2274,16 +2625,11 @@ static void I3C_TransferStateMachineStopState(I3C_Type *base,
                                               i3c_master_handle_t *handle,
                                               i3c_master_state_machine_param_t *stateParams)
 {
-    /* Only issue a stop transition if the caller requested it. */
-    if (0UL == (handle->transfer.flags & (uint32_t)kI3C_TransferNoStopFlag))
+    /* Stop if the caller requested one, or always on error. */
+    if ((0UL == (handle->transfer.flags & (uint32_t)kI3C_TransferNoStopFlag)) ||
+        (kStatus_Success != stateParams->result))
     {
-        /* Make sure there is room in the tx fifo for the stop command. */
-        if (0UL == (stateParams->txCount)--)
-        {
-            stateParams->state_complete = true;
-            return;
-        }
-        if (handle->transfer.busType == kI3C_TypeI3CDdr)
+        if (stateParams->masterState == kI3C_MasterStateDdr)
         {
             I3C_MasterEmitRequest(base, kI3C_RequestForceExit);
         }
@@ -2300,7 +2646,6 @@ static status_t I3C_RunTransferStateMachine(I3C_Type *base, i3c_master_handle_t 
     i3c_master_state_machine_param_t stateParams;
     (void)memset(&stateParams, 0, sizeof(stateParams));
 
-    stateParams.result         = kStatus_Success;
     stateParams.state_complete = false;
 
     /* Set default isDone return value. */
@@ -2319,36 +2664,40 @@ static status_t I3C_RunTransferStateMachine(I3C_Type *base, i3c_master_handle_t 
     stateParams.result      = I3C_MasterCheckAndClearError(base, errStatus);
     if (kStatus_Success != stateParams.result)
     {
-        return stateParams.result;
+        /* On error, finish through the stop state. */
+        handle->state = (uint8_t)kStopState;
     }
-
-    if (0UL != (stateParams.status & (uint32_t)kI3C_MasterSlave2MasterFlag))
+    else
     {
-        if (handle->callback.slave2Master != NULL)
+        if (0UL != (stateParams.status & (uint32_t)kI3C_MasterSlave2MasterFlag))
         {
-            handle->callback.slave2Master(base, handle->userData);
+            if (handle->callback.slave2Master != NULL)
+            {
+                handle->callback.slave2Master(base, handle->userData);
+            }
         }
-    }
 
-    if ((0UL != (stateParams.status & (uint32_t)kI3C_MasterSlaveStartFlag)) &&
-        (handle->transfer.busType != kI3C_TypeI2C))
-    {
-        handle->state = (uint8_t)kSlaveStartState;
-    }
+        if ((0UL != (stateParams.status & (uint32_t)kI3C_MasterSlaveStartFlag)) &&
+            (handle->transfer.busType != kI3C_TypeI2C))
+        {
+            handle->state = (uint8_t)kSlaveStartState;
+        }
 
-    if ((stateParams.masterState == kI3C_MasterStateIbiRcv) || (stateParams.masterState == kI3C_MasterStateIbiAck))
-    {
-        handle->state = (uint8_t)kIBIWonState;
-    }
+        if ((stateParams.masterState == kI3C_MasterStateIbiRcv) || (stateParams.masterState == kI3C_MasterStateIbiAck))
+        {
+            handle->state = (uint8_t)kIBIWonState;
+        }
 
-    if (handle->state == (uint8_t)kIdleState)
-    {
-        return stateParams.result;
-    }
+        if (handle->state == (uint8_t)kIdleState)
+        {
+            return stateParams.result;
+        }
 
-    /* Get fifo counts and compute room in tx fifo. */
-    I3C_MasterGetFifoCounts(base, &stateParams.rxCount, &stateParams.txCount);
-    stateParams.txCount = txFifoSize - stateParams.txCount;
+        /* Get fifo counts and compute room in tx fifo. */
+        I3C_MasterGetFifoCounts(base, &stateParams.rxCount, &stateParams.txCount);
+        assert(txFifoSize >= stateParams.txCount);
+        stateParams.txCount = txFifoSize - stateParams.txCount;
+    }
 
     while (!stateParams.state_complete)
     {
@@ -2403,7 +2752,7 @@ static status_t I3C_InitTransferStateMachine(I3C_Type *base, i3c_master_handle_t
 
     if (xfer->busType != kI3C_TypeI3CDdr)
     {
-        direction = (0UL != xfer->subaddressSize) ? kI3C_Write : xfer->direction;
+        direction = (0UL != xfer->subaddressSize) ? (i3c_direction_t)kI3C_Write : xfer->direction;
     }
 
     if (0UL != (xfer->flags & (uint32_t)kI3C_TransferStartWithBroadcastAddr))
@@ -2640,8 +2989,6 @@ status_t I3C_MasterTransferGetCount(I3C_Type *base, i3c_master_handle_t *handle,
  *
  * param base The I3C peripheral base address.
  * param handle Pointer to the I3C master driver handle.
- * retval #kStatus_Success A transaction was successfully aborted.
- * retval #kStatus_I3C_Idle There is not a non-blocking transaction currently in progress.
  */
 void I3C_MasterTransferAbort(I3C_Type *base, i3c_master_handle_t *handle)
 {
@@ -2690,13 +3037,8 @@ void I3C_MasterTransferHandleIRQ(I3C_Type *base, void *intHandle)
 
     if (isDone || (result != kStatus_Success))
     {
-        /* XXX need to handle data that may be in rx fifo below watermark level? */
-
-        /* XXX handle error, terminate xfer */
-        if ((result == kStatus_I3C_Nak) || (result == kStatus_I3C_IBIWon))
-        {
-            (void)I3C_MasterEmitStop(base, false);
-        }
+        /* Flush the FIFOs. */
+        base->MDATACTRL |= I3C_MDATACTRL_FLUSHTB_MASK | I3C_MDATACTRL_FLUSHFB_MASK;
 
         /* Disable internal IRQ enables. */
         I3C_MasterDisableInterrupts(base, (uint32_t)kI3C_MasterTxReadyFlag);
@@ -2777,11 +3119,10 @@ void I3C_SlaveGetDefaultConfig(i3c_slave_config_t *slaveConfig)
 void I3C_SlaveInit(I3C_Type *base, const i3c_slave_config_t *slaveConfig, uint32_t slowClock_Hz)
 {
     assert(NULL != slaveConfig);
-    assert((slowClock_Hz >= 1000000U) || (slowClock_Hz == 0U));
+    assert(((slowClock_Hz >= 1000000U) && (slowClock_Hz <= 256000000U)) || (slowClock_Hz == 0U));
 
     uint32_t configValue;
-#if !(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) || \
-    !(defined(FSL_FEATURE_I3C_HAS_NO_RESET) && FSL_FEATURE_I3C_HAS_NO_RESET)
+#if !(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) || defined(I3C_RSTS)
     uint32_t instance = I3C_GetInstance(base);
 #endif
 
@@ -2790,7 +3131,7 @@ void I3C_SlaveInit(I3C_Type *base, const i3c_slave_config_t *slaveConfig, uint32
     CLOCK_EnableClock(kI3cClocks[instance]);
 #endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
 
-#if !(defined(FSL_FEATURE_I3C_HAS_NO_RESET) && FSL_FEATURE_I3C_HAS_NO_RESET)
+#if defined(I3C_RSTS)
     /* Reset the I3C module */
     RESET_PeripheralReset(kI3cResets[instance]);
 #endif
@@ -2801,7 +3142,7 @@ void I3C_SlaveInit(I3C_Type *base, const i3c_slave_config_t *slaveConfig, uint32
        generate 1us clock cycle if slow clock is 1MHz. The value of 0 would not give a correct match indication. */
     if (slowClock_Hz != 0U)
     {
-        matchCount = (uint8_t)(slowClock_Hz / 1000000UL) - 1U;
+        matchCount = (uint8_t)(((slowClock_Hz / 1000000UL) - 1U) & 0xFFU);
         matchCount = (matchCount == 0U) ? 1U : matchCount;
     }
     else
@@ -2832,18 +3173,19 @@ void I3C_SlaveInit(I3C_Type *base, const i3c_slave_config_t *slaveConfig, uint32
 #if !(defined(FSL_FEATURE_I3C_HAS_NO_SCONFIG_BAMATCH) && FSL_FEATURE_I3C_HAS_NO_SCONFIG_BAMATCH)
                    I3C_SCONFIG_BAMATCH(matchCount) |
 #endif
-                   I3C_SCONFIG_OFFLINE(slaveConfig->offline) |
+                   (slaveConfig->offline ? I3C_SCONFIG_OFFLINE_MASK : 0U) |
 #if !(defined(FSL_FEATURE_I3C_HAS_NO_SCONFIG_IDRAND) && FSL_FEATURE_I3C_HAS_NO_SCONFIG_IDRAND)
-                   I3C_SCONFIG_IDRAND(slaveConfig->enableRandomPart) |
+                   (slaveConfig->enableRandomPart ? I3C_SCONFIG_IDRAND_MASK : 0U) |
 #endif
 #if defined(FSL_FEATURE_I3C_HAS_HDROK) && FSL_FEATURE_I3C_HAS_HDROK
                    I3C_SCONFIG_HDROK((0U != (slaveConfig->hdrMode & (uint8_t)kI3C_HDRModeDDR)) ? 1U : 0U) |
 #else
                    I3C_SCONFIG_DDROK((0U != (slaveConfig->hdrMode & (uint8_t)kI3C_HDRModeDDR)) ? 1U : 0U) |
 #endif
-                   I3C_SCONFIG_S0IGNORE(slaveConfig->ignoreS0S1Error) |
-                   I3C_SCONFIG_MATCHSS(slaveConfig->matchSlaveStartStop) |
-                   I3C_SCONFIG_NACK(slaveConfig->nakAllRequest) | I3C_SCONFIG_SLVENA(slaveConfig->enableSlave);
+                   (slaveConfig->ignoreS0S1Error ? I3C_SCONFIG_S0IGNORE_MASK : 0U) |
+                   (slaveConfig->matchSlaveStartStop ? I3C_SCONFIG_MATCHSS_MASK : 0U) |
+                   (slaveConfig->nakAllRequest ? I3C_SCONFIG_NACK_MASK : 0U) |
+                   (slaveConfig->enableSlave ? I3C_SCONFIG_SLVENA_MASK : 0U);
 
     base->SVENDORID &= ~I3C_SVENDORID_VID_MASK;
     base->SVENDORID |= I3C_SVENDORID_VID(slaveConfig->vendorID);
@@ -2885,7 +3227,7 @@ void I3C_SlaveDeinit(I3C_Type *base)
 {
     uint32_t idx = I3C_GetInstance(base);
 
-#if !(defined(FSL_FEATURE_I3C_HAS_NO_RESET) && FSL_FEATURE_I3C_HAS_NO_RESET)
+#if defined(I3C_RSTS)
     /* Reset the I3C module */
     RESET_PeripheralReset(kI3cResets[idx]);
 #endif
@@ -2907,28 +3249,9 @@ void I3C_SlaveDeinit(I3C_Type *base)
  */
 i3c_slave_activity_state_t I3C_SlaveGetActivityState(I3C_Type *base)
 {
-    uint8_t activeState = (uint8_t)((base->SSTATUS & I3C_SSTATUS_ACTSTATE_MASK) >> I3C_SSTATUS_ACTSTATE_SHIFT);
-    i3c_slave_activity_state_t returnCode;
-    switch (activeState)
-    {
-        case (uint8_t)kI3C_SlaveNoLatency:
-            returnCode = kI3C_SlaveNoLatency;
-            break;
-        case (uint8_t)kI3C_SlaveLatency1Ms:
-            returnCode = kI3C_SlaveLatency1Ms;
-            break;
-        case (uint8_t)kI3C_SlaveLatency100Ms:
-            returnCode = kI3C_SlaveLatency100Ms;
-            break;
-        case (uint8_t)kI3C_SlaveLatency10S:
-            returnCode = kI3C_SlaveLatency10S;
-            break;
-        default:
-            returnCode = kI3C_SlaveNoLatency;
-            break;
-    }
+    uint32_t activeState = (base->SSTATUS & I3C_SSTATUS_ACTSTATE_MASK) >> I3C_SSTATUS_ACTSTATE_SHIFT;
 
-    return returnCode;
+    return (i3c_slave_activity_state_t)activeState;
 }
 
 #if !(defined(FSL_FEATURE_I3C_HAS_NO_SLAVE_IBI_MR_HJ) && FSL_FEATURE_I3C_HAS_NO_SLAVE_IBI_MR_HJ)
@@ -3037,6 +3360,8 @@ void I3C_SlaveRequestIBIWithData(I3C_Type *base, uint8_t *data, size_t dataSize)
  */
 status_t I3C_SlaveSend(I3C_Type *base, const void *txBuff, size_t txSize)
 {
+    assert(txSize > 0U);
+
     const uint8_t *buf = (const uint8_t *)((const void *)txBuff);
     status_t result    = kStatus_Success;
 
@@ -3156,7 +3481,7 @@ void I3C_SlaveTransferCreateHandle(I3C_Type *base,
 
     /* Save Tx FIFO Size. */
     handle->txFifoSize =
-        2U << ((base->SCAPABILITIES & I3C_SCAPABILITIES_FIFOTX_MASK) >> I3C_SCAPABILITIES_FIFOTX_SHIFT);
+        2UL << ((base->SCAPABILITIES & I3C_SCAPABILITIES_FIFOTX_MASK) >> I3C_SCAPABILITIES_FIFOTX_SHIFT);
 
     /* Save this handle for IRQ use. */
     s_i3cSlaveHandle[instance] = handle;
@@ -3259,8 +3584,6 @@ status_t I3C_SlaveTransferGetCount(I3C_Type *base, i3c_slave_handle_t *handle, s
  * note This API could be called at any time to stop slave for handling the bus events.
  * param base The I3C peripheral base address.
  * param handle Pointer to #i3c_slave_handle_t structure which stores the transfer state.
- * retval #kStatus_Success
- * retval #kStatus_I3C_Idle
  */
 void I3C_SlaveTransferAbort(I3C_Type *base, i3c_slave_handle_t *handle)
 {
@@ -3384,6 +3707,10 @@ static void I3C_SlaveTransferHandleTxReady(I3C_Type *base,
                                            i3c_slave_handleIrq_param_t *stateParams)
 {
     assert(NULL != base && NULL != handle && NULL != stateParams);
+
+    uint8_t *txData;
+    size_t txDataSize;
+
     handle->wasTransmit = true;
 
     /* If we're out of data, invoke callback to get more. */
@@ -3408,24 +3735,33 @@ static void I3C_SlaveTransferHandleTxReady(I3C_Type *base,
     {
         I3C_SlaveDisableInterrupts(base, (uint32_t)kI3C_SlaveTxReadyFlag);
         (stateParams->pendingInts) &= ~(uint32_t)kI3C_SlaveTxReadyFlag;
+        return;
     }
 
-    /* Transmit a byte. */
-    while ((handle->transfer.txDataSize != 0UL) && ((stateParams->txCount) != 0U))
+    /* Transmit bytes until FIFO is full. */
+    txData     = handle->transfer.txData;
+    txDataSize = handle->transfer.txDataSize;
+    while ((txDataSize != 0UL) && ((stateParams->txCount) != 0U))
     {
-        if (handle->transfer.txDataSize > 1UL)
+        uint8_t txByte = *txData;
+        txData++;
+
+        if (txDataSize > 1UL)
         {
-            base->SWDATAB = *handle->transfer.txData++;
+            base->SWDATAB = txByte;
         }
         else
         {
-            base->SWDATABE = *handle->transfer.txData++;
+            base->SWDATABE = txByte;
             I3C_SlaveDisableInterrupts(base, (uint32_t)kI3C_SlaveTxReadyFlag);
         }
-        --(handle->transfer.txDataSize);
-        ++(handle->transferredCount);
-        (stateParams->txCount)--;
+
+        txDataSize--;
+        handle->transferredCount++;
+        stateParams->txCount--;
     }
+    handle->transfer.txData     = txData;
+    handle->transfer.txDataSize = txDataSize;
 }
 
 static void I3C_SlaveTransferHandleRxReady(I3C_Type *base,
@@ -3451,7 +3787,7 @@ static void I3C_SlaveTransferHandleRxReady(I3C_Type *base,
     /* Receive a byte. */
     while ((stateParams->rxCount != 0U) && ((handle->transfer.rxData != NULL) && (handle->transfer.rxDataSize != 0UL)))
     {
-        *(handle->transfer.rxData++) = (uint8_t)base->SRDATAB;
+        *(handle->transfer.rxData++) = (uint8_t)(base->SRDATAB & 0xFFU);
         --(handle->transfer.rxDataSize);
         ++(handle->transferredCount);
         (stateParams->rxCount)--;
@@ -3549,6 +3885,14 @@ static void I3C_CommonIRQHandler(I3C_Type *base, uint32_t instance)
     SDK_ISR_EXIT_BARRIER;
 }
 
+void I3C_DriverIRQHandler(uint32_t instance)
+{
+    if (instance < ARRAY_SIZE(kI3cBases))
+    {
+        I3C_CommonIRQHandler(kI3cBases[instance], instance);
+    }
+}
+
 #if defined(I3C)
 /* Implementation of I3C handler named in startup code. */
 void I3C0_DriverIRQHandler(void);
@@ -3591,5 +3935,19 @@ void I3C3_DriverIRQHandler(void);
 void I3C3_DriverIRQHandler(void)
 {
     I3C_CommonIRQHandler(I3C3, 3);
+}
+#endif
+
+#if defined(HSP__I3C) && defined(WAKE__I3C)
+void HSP_I3C_IRQHandler(void);
+void HSP_I3C_IRQHandler(void)
+{
+    I3C_CommonIRQHandler(HSP__I3C, 0);
+}
+
+void WAKE_I3C_IRQHandler(void);
+void WAKE_I3C_IRQHandler(void)
+{
+    I3C_CommonIRQHandler(WAKE__I3C, 1);
 }
 #endif

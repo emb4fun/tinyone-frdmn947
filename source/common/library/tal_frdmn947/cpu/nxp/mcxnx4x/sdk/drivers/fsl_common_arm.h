@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015-2016, Freescale Semiconductor, Inc.
- * Copyright 2016-2022, 2024 NXP
+ * Copyright 2016-2022, 2024-2025 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -414,9 +414,19 @@ _Pragma("diag_suppress=Pm120")
 #define SDK_L2CACHE_ALIGN(var) SDK_ALIGN(var, FSL_FEATURE_L2CACHE_LINESIZE_BYTE)
 #endif
 
-/*! Macro to change a value to a given size aligned value */
+/*! Macro to change a value to a given size aligned value (rounded up) */
 #define SDK_SIZEALIGN(var, alignbytes) \
     ((unsigned int)((var) + ((alignbytes)-1U)) & (unsigned int)(~(unsigned int)((alignbytes)-1U)))
+
+/*! Macro to change a value to a given size aligned value (rounded up), the wrapper of SDK_SIZEALIGN */
+#define SDK_SIZEALIGN_UP(var, alignbytes)  SDK_SIZEALIGN(var, alignbytes)
+
+/*! Macro to change a value to a given size aligned value (rounded down) */
+#define SDK_SIZEALIGN_DOWN(var, alignbytes) \
+    ((unsigned int)(var) & (unsigned int)(~(unsigned int)((alignbytes)-1U)))
+
+/*! Macro to check if a value is aligned to a given size */
+#define SDK_IS_ALIGNED(var, alignbytes) (((unsigned int)(var) & ((unsigned int)(alignbytes) - 1U)) == 0U)
 /*! @} */
 
 /*!
@@ -474,15 +484,21 @@ _Pragma("diag_suppress=Pm120")
 #endif
 
 #elif (defined(__GNUC__)) || defined(DOXYGEN_OUTPUT)
+#if defined(__ARM_ARCH_8A__) /* This macro is ARMv8-A specific */
+#define MCUX_CS "//"
+#else
+#define MCUX_CS "@"
+#endif
+
 /* For GCC, when the non-cacheable section is required, please define "__STARTUP_INITIALIZE_NONCACHEDATA"
  * in your projects to make sure the non-cacheable section variables will be initialized in system startup.
  */
 #define AT_NONCACHEABLE_SECTION_INIT(var) __attribute__((section("NonCacheable.init"))) var
 #define AT_NONCACHEABLE_SECTION_ALIGN_INIT(var, alignbytes) \
     __attribute__((section("NonCacheable.init"))) var __attribute__((aligned(alignbytes)))
-#define AT_NONCACHEABLE_SECTION(var) __attribute__((section("NonCacheable,\"aw\",%nobits @"))) var
+#define AT_NONCACHEABLE_SECTION(var) __attribute__((section("NonCacheable,\"aw\",%nobits " MCUX_CS))) var
 #define AT_NONCACHEABLE_SECTION_ALIGN(var, alignbytes) \
-    __attribute__((section("NonCacheable,\"aw\",%nobits @"))) var __attribute__((aligned(alignbytes)))
+    __attribute__((section("NonCacheable,\"aw\",%nobits " MCUX_CS))) var __attribute__((aligned(alignbytes)))
 #else
 #error Toolchain not supported.
 #endif
@@ -563,7 +579,11 @@ _Pragma("diag_suppress=Pm120")
  * Place data in a section which can be accessed quickly by core, and the variable
  * address is set to align with \a alignbytes.
  */
-#if (defined(__ICCARM__))
+#if (defined(FSL_SDK_DRIVER_QUICK_ACCESS_DISABLE) && (FSL_SDK_DRIVER_QUICK_ACCESS_DISABLE + 0))
+#define AT_QUICKACCESS_SECTION_CODE(func) func
+#define AT_QUICKACCESS_SECTION_DATA(var) var
+#define AT_QUICKACCESS_SECTION_DATA_ALIGN(var, alignbytes) SDK_ALIGN(var, alignbytes)
+#elif (defined(__ICCARM__))
 #define AT_QUICKACCESS_SECTION_CODE(func) func @"CodeQuickAccess"
 #define AT_QUICKACCESS_SECTION_DATA(var)  var @"DataQuickAccess"
 #define AT_QUICKACCESS_SECTION_DATA_ALIGN(var, alignbytes) \
@@ -580,25 +600,77 @@ _Pragma("diag_suppress=Pm120")
     __attribute__((section("DataQuickAccess"))) var __attribute__((aligned(alignbytes)))
 #else
 #error Toolchain not supported.
-#endif /* defined(__ICCARM__) */
+#endif /* QuickAccess section macro */
 /*! @} */
 
 /*!
  * @name Ram Function
  * @{
- *
- * @def RAMFUNCTION_SECTION_CODE(func)
- * Place function in ram.
+ */
+
+/*!
+ * @def MCUX_RAMFUNC
+ * Function attribute to place function in RAM. For example, to place
+ * function my_func in ram, use like:
+ * @code
+ * MCUX_RAMFUNC my_func
+ * @endcode
  */
 #if (defined(__ICCARM__))
-#define RAMFUNCTION_SECTION_CODE(func) func @"RamFunction"
+#define MCUX_RAMFUNC __ramfunc
 #elif (defined(__CC_ARM) || defined(__ARMCC_VERSION))
-#define RAMFUNCTION_SECTION_CODE(func) __attribute__((section("RamFunction"))) func
+#define MCUX_RAMFUNC __attribute__((noinline)) __attribute__((section(".ramfunc")))
 #elif (defined(__GNUC__)) || defined(DOXYGEN_OUTPUT)
-#define RAMFUNCTION_SECTION_CODE(func) __attribute__((section("RamFunction"))) func
+#define MCUX_RAMFUNC __attribute__((noinline)) __attribute__((long_call, section(".ramfunc")))
 #else
 #error Toolchain not supported.
 #endif /* defined(__ICCARM__) */
+
+/*!
+ * @def RAMFUNCTION_SECTION_CODE(func)
+ * Place function in ram.
+ */
+#define RAMFUNCTION_SECTION_CODE(func) MCUX_RAMFUNC func
+
+/*! @} */
+
+/*!
+ * @name Label for Deprecated or Experimental functions
+ *
+ * The deprecated functions will be removed in next release.
+ * The experimental functions might be removed at any time.
+ * Avoid using them.
+ * @{
+ */
+
+/*!
+ * @brief Deprecated APIs
+ */
+#define MCUX_DEPRECATED __attribute__((deprecated("Deprecated feature")))
+
+/*!
+ * @brief Deprecated macros
+ */
+#if (defined(__ICCARM__))
+#define MCUX_DEPRECATED_MACRO _Pragma("message(\"Warning: Deprecated macro\")")
+#else
+#define MCUX_DEPRECATED_MACRO _Pragma("GCC warning \"Deprecated macro\"")
+#endif
+
+/*!
+ * @brief Experimental APIs
+ */
+#define MCUX_EXPERIMENTAL __attribute__((deprecated("Experimental feature")))
+
+/*!
+ * @brief Experimental macros
+ */
+#if (defined(__ICCARM__))
+#define MCUX_EXPERIMENTAL_MACRO _Pragma("message(\"Warning: Experimental macro\")")
+#else
+#define MCUX_EXPERIMENTAL_MACRO _Pragma("GCC warning \"Experimental macro\"")
+#endif
+
 /*! @} */
 
 /*!
@@ -614,7 +686,16 @@ _Pragma("diag_suppress=Pm120")
 #define MSDK_REG_NONSECURE_ADDR(x) ((uintptr_t)(x) & ~(0x1UL << 28))
 #else
 #define MSDK_REG_SECURE_ADDR(x) (x)
-#define MSDK_REG_NONSECURE_ADDR(x) (x)
+#define MSDK_REG_NONSECURE_ADDR(x) ((uintptr_t)(x) & ~(0x1UL << 28))
+#endif
+
+/*!
+ * @brief The chip supports DWT CYCCNT or not.
+ */
+#if (defined(DWT) && defined(DWT_CTRL_CYCCNTENA_Msk))
+#define MSDK_HAS_DWT_CYCCNT 1
+#else
+#define MSDK_HAS_DWT_CYCCNT 0
 #endif
 
 /*!
@@ -641,8 +722,9 @@ _Pragma("diag_suppress=Pm120")
 #endif
 
 #if defined(FSL_FEATURE_IRQSTEER_EXT_INT_MAX_NUM) && (FSL_FEATURE_IRQSTEER_EXT_INT_MAX_NUM > 0) && defined(FSL_FEATURE_IRQSTEER_IRQ_START_INDEX) && (FSL_FEATURE_IRQSTEER_IRQ_START_INDEX > 0)
-void IRQSTEER_EnableInterrupt(int32_t instIdx, IRQn_Type irq);
-void IRQSTEER_DisableInterrupt(int32_t instIdx, IRQn_Type irq);
+void IRQSTEER_EnableInterrupt(int32_t irqsteerInstIdx, IRQn_Type interrupt);
+void IRQSTEER_DisableInterrupt(int32_t irqsteerInstIdx, IRQn_Type interrupt);
+int32_t IRQSTEER_GetInstIdxByIRQ(IRQn_Type irq);
 #endif
 
 /*******************************************************************************
@@ -669,22 +751,29 @@ extern "C" {
  * @retval kStatus_Success Interrupt enabled successfully
  * @retval kStatus_Fail Failed to enable the interrupt
  */
-static inline status_t EnableIRQ(IRQn_Type irq)
+static inline status_t EnableIRQ(IRQn_Type interrupt)
 {
     status_t status = kStatus_Success;
 
-    if (NotAvail_IRQn == irq)
+    if (NotAvail_IRQn == interrupt)
     {
         status = kStatus_Fail;
     }
 
 #if defined(FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS) && (FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS > 0)
-    else if ((int32_t)irq >= (int32_t)FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS)
+    else if ((int32_t)interrupt >= (int32_t)FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS)
     {
 #if defined(FSL_FEATURE_IRQSTEER_EXT_INT_MAX_NUM) && (FSL_FEATURE_IRQSTEER_EXT_INT_MAX_NUM > 0) && defined(FSL_FEATURE_IRQSTEER_IRQ_START_INDEX) && (FSL_FEATURE_IRQSTEER_IRQ_START_INDEX > 0)
-        int32_t irqsteerInstIdx = (int32_t)((irq + 1 - FSL_FEATURE_IRQSTEER_IRQ_START_INDEX) / FSL_FEATURE_IRQSTEER_EXT_INT_MAX_NUM);
+        int32_t irqsteerInstIdx = IRQSTEER_GetInstIdxByIRQ(interrupt);
 
-        IRQSTEER_EnableInterrupt(irqsteerInstIdx, irq);
+        if (irqsteerInstIdx >= 0)
+        {
+            IRQSTEER_EnableInterrupt(irqsteerInstIdx, interrupt);
+        }
+        else
+        {
+            status = kStatus_Fail;
+        }
 #else
         status = kStatus_Fail;
 #endif
@@ -694,9 +783,9 @@ static inline status_t EnableIRQ(IRQn_Type irq)
     else
     {
 #if defined(__GIC_PRIO_BITS)
-        GIC_EnableIRQ(irq);
+        GIC_EnableIRQ(interrupt);
 #else
-        NVIC_EnableIRQ(irq);
+        NVIC_EnableIRQ(interrupt);
 #endif
     }
 
@@ -719,22 +808,29 @@ static inline status_t EnableIRQ(IRQn_Type irq)
  * @retval kStatus_Success Interrupt disabled successfully
  * @retval kStatus_Fail Failed to disable the interrupt
  */
-static inline status_t DisableIRQ(IRQn_Type irq)
+static inline status_t DisableIRQ(IRQn_Type interrupt)
 {
     status_t status = kStatus_Success;
 
-    if (NotAvail_IRQn == irq)
+    if (NotAvail_IRQn == interrupt)
     {
         status = kStatus_Fail;
     }
 
 #if defined(FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS) && (FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS > 0)
-    else if ((int32_t)irq >= (int32_t)FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS)
+    else if ((int32_t)interrupt >= (int32_t)FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS)
     {
 #if defined(FSL_FEATURE_IRQSTEER_EXT_INT_MAX_NUM) && (FSL_FEATURE_IRQSTEER_EXT_INT_MAX_NUM > 0) && defined(FSL_FEATURE_IRQSTEER_IRQ_START_INDEX) && (FSL_FEATURE_IRQSTEER_IRQ_START_INDEX > 0)
-        int32_t irqsteerInstIdx = (int32_t)((interrupt - FSL_FEATURE_IRQSTEER_IRQ_START_INDEX) / FSL_FEATURE_IRQSTEER_EXT_INT_MAX_NUM);
+        int32_t irqsteerInstIdx = IRQSTEER_GetInstIdxByIRQ(interrupt);
 
-        IRQSTEER_DisableInterrupt(irqsteerInstIdx, irq);
+        if (irqsteerInstIdx >= 0)
+        {
+            IRQSTEER_DisableInterrupt(irqsteerInstIdx, interrupt);
+        }
+        else
+        {
+            status = kStatus_Fail;
+        }
 #else
         status = kStatus_Fail;
 #endif
@@ -744,9 +840,9 @@ static inline status_t DisableIRQ(IRQn_Type irq)
     else
     {
 #if defined(__GIC_PRIO_BITS)
-        GIC_DisableIRQ(irq);
+        GIC_DisableIRQ(interrupt);
 #else
-        NVIC_DisableIRQ(irq);
+        NVIC_DisableIRQ(interrupt);
 #endif
     }
 
@@ -770,17 +866,17 @@ static inline status_t DisableIRQ(IRQn_Type irq)
  * @retval kStatus_Success Interrupt priority set successfully
  * @retval kStatus_Fail Failed to set the interrupt priority.
  */
-static inline status_t EnableIRQWithPriority(IRQn_Type irq, uint8_t priNum)
+static inline status_t EnableIRQWithPriority(IRQn_Type interrupt, uint8_t priNum)
 {
     status_t status = kStatus_Success;
 
-    if (NotAvail_IRQn == irq)
+    if (NotAvail_IRQn == interrupt)
     {
         status = kStatus_Fail;
     }
 
 #if defined(FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS) && (FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS > 0)
-    else if ((int32_t)irq >= (int32_t)FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS)
+    else if ((int32_t)interrupt >= (int32_t)FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS)
     {
         status = kStatus_Fail;
     }
@@ -789,11 +885,11 @@ static inline status_t EnableIRQWithPriority(IRQn_Type irq, uint8_t priNum)
     else
     {
 #if defined(__GIC_PRIO_BITS)
-        GIC_SetPriority(irq, priNum);
-        GIC_EnableIRQ(irq);
+        GIC_SetPriority(interrupt, priNum);
+        GIC_EnableIRQ(interrupt);
 #else
-        NVIC_SetPriority(irq, priNum);
-        NVIC_EnableIRQ(irq);
+        NVIC_SetPriority(interrupt, priNum);
+        NVIC_EnableIRQ(interrupt);
 #endif
     }
 
@@ -818,17 +914,17 @@ static inline status_t EnableIRQWithPriority(IRQn_Type irq, uint8_t priNum)
  * @retval kStatus_Success Interrupt priority set successfully
  * @retval kStatus_Fail Failed to set the interrupt priority.
  */
-static inline status_t IRQ_SetPriority(IRQn_Type irq, uint8_t priNum)
+static inline status_t IRQ_SetPriority(IRQn_Type interrupt, uint8_t priNum)
 {
     status_t status = kStatus_Success;
 
-    if (NotAvail_IRQn == irq)
+    if (NotAvail_IRQn == interrupt)
     {
         status = kStatus_Fail;
     }
 
 #if defined(FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS) && (FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS > 0)
-    else if ((int32_t)irq >= (int32_t)FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS)
+    else if ((int32_t)interrupt >= (int32_t)FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS)
     {
         status = kStatus_Fail;
     }
@@ -837,9 +933,9 @@ static inline status_t IRQ_SetPriority(IRQn_Type irq, uint8_t priNum)
     else
     {
 #if defined(__GIC_PRIO_BITS)
-        GIC_SetPriority(irq, priNum);
+        GIC_SetPriority(interrupt, priNum);
 #else
-        NVIC_SetPriority(irq, priNum);
+        NVIC_SetPriority(interrupt, priNum);
 #endif
     }
 
@@ -863,17 +959,17 @@ static inline status_t IRQ_SetPriority(IRQn_Type irq, uint8_t priNum)
  * @retval kStatus_Success Interrupt priority set successfully
  * @retval kStatus_Fail Failed to set the interrupt priority.
  */
-static inline status_t IRQ_ClearPendingIRQ(IRQn_Type irq)
+static inline status_t IRQ_ClearPendingIRQ(IRQn_Type interrupt)
 {
     status_t status = kStatus_Success;
 
-    if (NotAvail_IRQn == irq)
+    if (NotAvail_IRQn == interrupt)
     {
         status = kStatus_Fail;
     }
 
 #if defined(FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS) && (FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS > 0)
-    else if ((int32_t)irq >= (int32_t)FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS)
+    else if ((int32_t)interrupt >= (int32_t)FSL_FEATURE_NUMBER_OF_LEVEL1_INT_VECTORS)
     {
         status = kStatus_Fail;
     }
@@ -882,9 +978,9 @@ static inline status_t IRQ_ClearPendingIRQ(IRQn_Type irq)
     else
     {
 #if defined(__GIC_PRIO_BITS)
-        GIC_ClearPendingIRQ(irq);
+        GIC_ClearPendingIRQ(interrupt);
 #else
-        NVIC_ClearPendingIRQ(irq);
+        NVIC_ClearPendingIRQ(interrupt);
 #endif
     }
 
@@ -990,7 +1086,7 @@ void DisableDeepSleepIRQ(IRQn_Type interrupt);
 #endif /* FSL_FEATURE_POWERLIB_EXTEND */
 #endif /* FSL_FEATURE_SOC_SYSCON_COUNT */
 
-#if defined(DWT)
+#if MSDK_HAS_DWT_CYCCNT
 /*!
  * @brief Enable the counter to get CPU cycles.
  */
@@ -1056,10 +1152,17 @@ static inline bool _SDK_AtomicLocalCompareAndSet1Byte(volatile uint8_t *addr, ui
         s_actual = __LDREXB(addr);
         if (s_actual != expected)
         {
+            /* Workaround for CMSIS 6.1 Issue #264(https://github.com/ARM-software/CMSIS_6/issues/264). */
+#if (defined(__ICCARM__) && (__CM_CMSIS_VERSION  == 0x60001UL))
+          {
+            __ASM volatile("CLREX" ::: "memory");
+          }
+#else
             __CLREX();
+#endif
             return false;
         }
-    } while (__STREXB((newValue), (addr)));
+    } while (0U != (__STREXB((newValue), (addr))));
 
     return true;
     
@@ -1074,10 +1177,17 @@ static inline bool _SDK_AtomicLocalCompareAndSet2Byte(volatile uint16_t *addr, u
         s_actual = __LDREXH(addr);
         if (s_actual != expected)
         {
+            /* Workaround for CMSIS 6.1 Issue #264(https://github.com/ARM-software/CMSIS_6/issues/264). */
+#if (defined(__ICCARM__) && (__CM_CMSIS_VERSION  == 0x60001UL))
+          {
+            __ASM volatile("CLREX" ::: "memory");
+          }
+#else
             __CLREX();
+#endif
             return false;
         }
-    } while (__STREXH((newValue), (addr)));
+    } while (0U != (__STREXH((newValue), (addr))));
 
     return true;
 }
@@ -1091,10 +1201,17 @@ static inline bool _SDK_AtomicLocalCompareAndSet4Byte(volatile uint32_t *addr, u
         s_actual = __LDREXW(addr);
         if (s_actual != expected)
         {
+            /* Workaround for CMSIS 6.1 Issue #264(https://github.com/ARM-software/CMSIS_6/issues/264). */
+#if (defined(__ICCARM__) && (__CM_CMSIS_VERSION  == 0x60001UL))
+          {
+            __ASM volatile("CLREX" ::: "memory");
+          }
+#else
             __CLREX();
+#endif
             return false;
         }
-    } while (__STREXW((newValue), (addr)));
+    } while (0U != (__STREXW((newValue), (addr))));
 
     return true;
 }
@@ -1106,7 +1223,7 @@ static inline uint8_t _SDK_AtomicLocalTestAndSet1Byte(volatile uint8_t *addr, ui
     do
     {
         s_old = __LDREXB(addr);
-    } while (__STREXB((newValue), (addr)));
+    } while (0U != (__STREXB((newValue), (addr))));
 
     return s_old;
 }
@@ -1118,7 +1235,7 @@ static inline uint16_t _SDK_AtomicLocalTestAndSet2Byte(volatile uint16_t *addr, 
     do
     {
         s_old = __LDREXH(addr);
-    } while (__STREXH((newValue), (addr)));
+    } while (0U != (__STREXH((newValue), (addr))));
 
     return s_old;
 }
@@ -1130,7 +1247,7 @@ static inline uint32_t _SDK_AtomicLocalTestAndSet4Byte(volatile uint32_t *addr, 
     do
     {
         s_old = __LDREXW(addr);
-    } while (__STREXW((newValue), (addr)));
+    } while (0U != (__STREXW((newValue), (addr))));
 
     return s_old;
 }

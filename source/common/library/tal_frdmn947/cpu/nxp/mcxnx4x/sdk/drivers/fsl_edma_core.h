@@ -43,6 +43,10 @@
 #define DMA_CITER_ELINKYES_CITER_SHIFT (0U)
 #define DMA_ATTR_SMOD_MASK             (0xF800U)
 #define DMA_ATTR_DMOD_MASK             (0xF8U)
+#define DMA_ATTR_SSIZE_MASK            (0x700U)
+#define DMA_ATTR_SSIZE_SHIFT           (8U)
+#define DMA_ATTR_DSIZE_MASK            (0x7U)
+#define DMA_ATTR_DSIZE_SHIFT           (0U)
 #define DMA_CITER_ELINKNO_ELINK_MASK   (0x8000U)
 #define DMA_CSR_MAJORELINK_MASK        (0x20U)
 #define DMA_BITER_ELINKYES_ELINK_MASK  (0x8000U)
@@ -56,8 +60,8 @@
 #define DMA_NBYTES_MLOFFNO_NBYTES_MASK (0x3FFFFFFFU)
 #define DMA_ATTR_DMOD(x)               (((uint16_t)(((uint16_t)(x)) << (3U))) & (0xF8U))
 #define DMA_ATTR_SMOD(x)               (((uint16_t)(((uint16_t)(x)) << (11U))) & (0xF800U))
-#define DMA_BITER_ELINKYES_LINKCH(x)   (((uint16_t)(((uint16_t)(x)) << (9U))) & (0x3E00U))
-#define DMA_CITER_ELINKYES_LINKCH(x)   (((uint16_t)(((uint16_t)(x)) << (9U))) & (0x3E00U))
+#define DMA_BITER_ELINKYES_LINKCH(x)   (((uint16_t)(((uint16_t)((x) & 0x1FU)) << (9U))) & (0x3E00U))
+#define DMA_CITER_ELINKYES_LINKCH(x)   (((uint16_t)(((uint16_t)((x) & 0x1FU)) << (9U))) & (0x3E00U))
 #define DMA_NBYTES_MLOFFYES_MLOFF(x)   (((uint32_t)(((uint32_t)(x)) << (10U))) & (0x3FFFFC00U))
 #define DMA_NBYTES_MLOFFYES_DMLOE(x)   (((uint32_t)(((uint32_t)(x)) << (30U))) & (0x40000000U))
 #define DMA_NBYTES_MLOFFYES_SMLOE(x)   (((uint32_t)(((uint32_t)(x)) << (31U))) & (0x80000000U))
@@ -66,7 +70,7 @@
 #define DMA_ATTR_DSIZE(x)              (((uint16_t)(((uint16_t)(x)) << (0U))) & (0x7U))
 #define DMA_ATTR_SSIZE(x)              (((uint16_t)(((uint16_t)(x)) << (8U))) & (0x700U))
 #define DMA_CSR_DREQ(x)                (((uint16_t)(((uint16_t)(x)) << (3U))) & (0x8U))
-#define DMA_CSR_MAJORLINKCH(x)         (((uint16_t)(((uint16_t)(x)) << (8U))) & (0x1F00U))
+#define DMA_CSR_MAJORLINKCH(x)         (((uint16_t)(((uint16_t)((x) & 0x1FU)) << (8U))) & (0x1F00U))
 #define DMA_CH_MATTR_WCACHE(x)         (((uint16_t)(((uint16_t)(x)) << (4U))) & (0xF0U))
 #define DMA_CH_MATTR_RCACHE(x)         (((uint16_t)(((uint16_t)(x)) << (0U))) & (0xFU))
 #define DMA_CH_CSR_SIGNEXT_MASK        (0x3F0000U)
@@ -75,6 +79,8 @@
 #define DMA_CH_CSR_SWAP_SHIFT          (12U)
 #define DMA_CH_SBR_INSTR_MASK          (0x2000U)
 #define DMA_CH_SBR_INSTR_SHIFT         (13U)
+#define DMA_CH_SBR_EMI_MASK            (0x10000U)
+#define DMA_CH_SBR_EMI_SHIFT           (16U)
 #define DMA_CH_MUX_SOURCE(x)           (((uint32_t)(((uint32_t)(x)) << (0U))) & (0xFFU))
 
 /*! @brief DMA error flag */
@@ -145,9 +151,9 @@
 #define DMA_ENABLE_HALF_INT(base, channel) \
     (EDMA_TCD_CSR(EDMA_TCD_BASE(base, channel), EDMA_TCD_TYPE(base)) |= DMA_CSR_INTHALF_MASK)
 #define DMA_DISABLE_MAJOR_INT(base, channel) \
-    (EDMA_TCD_CSR(EDMA_TCD_BASE(base, channel), EDMA_TCD_TYPE(base)) &= ~(uint16_t)DMA_CSR_INTMAJOR_MASK)
+    (EDMA_TCD_CSR(EDMA_TCD_BASE(base, channel), EDMA_TCD_TYPE(base)) &= MCUX_MASK_INVERT_16(DMA_CSR_INTMAJOR_MASK))
 #define DMA_DISABLE_HALF_INT(base, channel) \
-    (EDMA_TCD_CSR(EDMA_TCD_BASE(base, channel), EDMA_TCD_TYPE(base)) &= ~(uint16_t)DMA_CSR_INTHALF_MASK)
+    (EDMA_TCD_CSR(EDMA_TCD_BASE(base, channel), EDMA_TCD_TYPE(base)) &= MCUX_MASK_INVERT_16(DMA_CSR_INTHALF_MASK))
 
 /*!@brief EDMA tcd align size */
 #define EDMA_TCD_ALIGN_SIZE (32U)

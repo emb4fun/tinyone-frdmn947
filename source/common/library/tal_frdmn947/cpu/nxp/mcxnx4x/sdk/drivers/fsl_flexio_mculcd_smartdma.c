@@ -17,11 +17,14 @@
 #endif
 
 #define FLEXIO_MCULCD_SMARTDMA_TX_START_SHIFTER 0U
-#if defined(MCXA276_SERIES) || defined(MCXA275_SERIES) || defined(MCXA176_SERIES) || defined(MCXA175_SERIES)|| \
-    defined(MCXA166_SERIES) || defined(MCXA165_SERIES)
-#define FLEXIO_MCULCD_SMARTDMA_TX_END_SHIFTER   3U
+#if defined(MCXA175_SERIES) || defined(MCXA176_SERIES) || defined(MCXA185_SERIES) || defined(MCXA186_SERIES) || \
+    defined(MCXA255_SERIES) || defined(MCXA256_SERIES) || defined(MCXA265_SERIES) || defined(MCXA266_SERIES) || \
+    defined(MCXA365_SERIES) || defined(MCXA366_SERIES) || defined(MCXA286_SERIES) || defined(MCXA287_SERIES) || \
+    defined(MCXA456_SERIES) || defined(MCXA457_SERIES) || defined(MCXA556_SERIES) || defined(MCXA557_SERIES) || \
+    defined(MCXA566_SERIES) || defined(MCXA567_SERIES) || defined(MCXA577_SERIES)
+#define FLEXIO_MCULCD_SMARTDMA_TX_END_SHIFTER 3U
 #else
-#define FLEXIO_MCULCD_SMARTDMA_TX_END_SHIFTER   7U
+#define FLEXIO_MCULCD_SMARTDMA_TX_END_SHIFTER 7U
 #endif
 #define FLEXIO_MCULCD_SMARTDMA_TX_SHIFTER_NUM \
     (FLEXIO_MCULCD_SMARTDMA_TX_END_SHIFTER - FLEXIO_MCULCD_SMARTDMA_TX_START_SHIFTER + 1)
@@ -111,8 +114,9 @@ static void FLEXIO_MCULCD_SMARTDMA_GetTxChunkLen(
 
 static void FLEXIO_MCULCD_RGB656ToRGB888(const uint16_t *rgb565, uint32_t pixelCount, uint8_t *rgb888)
 {
-    while ((pixelCount--) != 0U)
+    while (pixelCount != 0U)
     {
+        pixelCount--;
         *rgb888 = (uint8_t)(((*rgb565) & 0x001FU) << 3U);
         rgb888++;
         *rgb888 = (uint8_t)(((*rgb565) & 0x07E0U) >> 3U);
@@ -171,8 +175,11 @@ status_t FLEXIO_MCULCD_TransferCreateHandleSMARTDMA(FLEXIO_MCULCD_Type *base,
         {
             handle->smartdmaApi = (uint8_t)kSMARTDMA_FlexIO_DMA;
         }
-#if !(defined(MCXA276_SERIES) || defined(MCXA275_SERIES) || defined(MCXA176_SERIES) || defined(MCXA175_SERIES)|| \
-    defined(MCXA166_SERIES) || defined(MCXA165_SERIES))
+#if !(defined(MCXA175_SERIES) || defined(MCXA176_SERIES) || defined(MCXA185_SERIES) || defined(MCXA186_SERIES) || \
+      defined(MCXA255_SERIES) || defined(MCXA256_SERIES) || defined(MCXA265_SERIES) || defined(MCXA266_SERIES) || \
+      defined(MCXA365_SERIES) || defined(MCXA366_SERIES) || defined(MCXA286_SERIES) || defined(MCXA287_SERIES) || \
+      defined(MCXA456_SERIES) || defined(MCXA457_SERIES) || defined(MCXA556_SERIES) || defined(MCXA557_SERIES) || \
+      defined(MCXA566_SERIES) || defined(MCXA567_SERIES) || defined(MCXA577_SERIES))
         else if (((config->inputPixelFormat == kFLEXIO_MCULCD_RGB565) &&
                   (config->outputPixelFormat == kFLEXIO_MCULCD_RGB888)) ||
                  ((config->inputPixelFormat == kFLEXIO_MCULCD_BGR565) &&

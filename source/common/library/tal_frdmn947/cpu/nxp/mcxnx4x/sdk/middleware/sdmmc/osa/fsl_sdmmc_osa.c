@@ -139,7 +139,6 @@ status_t SDMMC_OSAEventGet(void *eventHandle, uint32_t eventType, uint32_t *flag
 
 #if defined(SDMMC_OSA_POLLING_EVENT_BY_SEMPHORE) && SDMMC_OSA_POLLING_EVENT_BY_SEMPHORE
     *flag = ((sdmmc_osa_event_t *)eventHandle)->eventFlag;
-    (void)eventType;
 #else
     (void)OSA_EventGet(&(((sdmmc_osa_event_t *)eventHandle)->handle), eventType, flag);
 #endif
@@ -252,6 +251,7 @@ status_t SDMMC_OSAMutexDestroy(void *mutexHandle)
 void SDMMC_OSADelay(uint32_t milliseconds)
 {
 #if (defined FSL_OSA_BM_TIMER_CONFIG) && (FSL_OSA_BM_TIMER_CONFIG == FSL_OSA_BM_TIMER_NONE)
+    assert(milliseconds <= UINT32_MAX / 1000U);
     SDK_DelayAtLeastUs(milliseconds * 1000U, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
 #else
     OSA_TimeDelay(milliseconds);

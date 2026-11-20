@@ -80,7 +80,7 @@
   <Watches active="0" update="Never"/>
  </Watch4>
  <Files>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="567" useTextEdit="1" path="../src/main.c" left="0" selected="1" top="536" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="567" useTextEdit="1" path="../src/main.c" left="0" selected="1" top="538" codecName="Default"/>
  </Files>
  <EMStudioWindow activeProject="frdmn947-boot-sd" fileDialogDefaultFilter="*.c" autoConnectTarget="J-Link" buildConfiguration="Flash to TCM Release" sessionSettings="" debugSearchFileMap="" fileDialogInitialDirectory="" debugSearchPath="" autoConnectCapabilities="3711"/>
 </session>

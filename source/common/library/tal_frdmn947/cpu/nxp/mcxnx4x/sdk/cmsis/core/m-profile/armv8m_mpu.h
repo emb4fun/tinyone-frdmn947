@@ -59,7 +59,6 @@
 /** \brief Normal memory outer-cacheable and inner-cacheable attributes
 * WT = Write Through, WB = Write Back, TR = Transient, RA = Read-Allocate, WA = Write Allocate
 */
-/*lint -save -e146*/
 #define MPU_ATTR_NORMAL_OUTER_NON_CACHEABLE (0b0100)
 #define MPU_ATTR_NORMAL_OUTER_WT_TR_RA      (0b0010)
 #define MPU_ATTR_NORMAL_OUTER_WT_TR_WA      (0b0001)
@@ -86,7 +85,6 @@
 #define MPU_ATTR_NORMAL_INNER_WB_RA         (0b1101)
 #define MPU_ATTR_NORMAL_INNER_WB_WA         (0b1110)
 #define MPU_ATTR_NORMAL_INNER_WB_RA_WA      (0b1111)
-/*lint -restore*/
 
 /** \brief Memory Attribute
 * \param O Outer memory attributes
@@ -190,7 +188,7 @@ typedef struct {
   \brief  Read MPU Type Register
   \return Number of MPU regions
 */
-__STATIC_INLINE uint32_t ARM_MPU_TYPE(void)
+__STATIC_INLINE uint32_t ARM_MPU_TYPE()
 {
   return ((MPU->TYPE) >> 8);
 }

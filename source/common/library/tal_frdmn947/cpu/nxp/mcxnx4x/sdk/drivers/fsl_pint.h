@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2016, Freescale Semiconductor, Inc.
- * Copyright 2016-2023, 2025 NXP
+ * Copyright 2016-2023, 2025-2026 NXP
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -23,7 +23,7 @@
 
 /*! @name Driver version */
 /*! @{ */
-#define FSL_PINT_DRIVER_VERSION (MAKE_VERSION(2, 2, 0))
+#define FSL_PINT_DRIVER_VERSION (MAKE_VERSION(2, 3, 1))
 /*! @} */
 
 /* Legacy code sets callback for each PINT event resource. */
@@ -607,6 +607,41 @@ void PINT_Deinit(PINT_Type *base);
 void PINT_EnableCallbackByIndex(PINT_Type *base, pint_pin_int_t pintIdx);
 
 /*!
+ * @brief enable interrupt in NVIC by pin index.
+
+ * This function enables the interrupt in the NVIC. The difference with
+ * PINT_EnableCallbackByIndex() is that PINT_EnableCallbackByIndex() not
+ * only enables the interrupt in the NVIC but also clears pending interrupts.
+ * Use this function together with PINT_DisableInterruptByIndex() to
+ * temporarily disable/enable the pin interrupt.
+ * Use PINT_EnableCallbackByIndex() to enable the interrupt after installing
+ * the callback.
+ *
+ * @param base Base address of the peripheral.
+ * @param pinIdx pin index.
+ *
+ * @retval None.
+ */
+void PINT_EnableInterruptByIndex(PINT_Type *base, pint_pin_int_t pintIdx);
+
+/*!
+ * @brief disable interrupt in NVIC by pin index.
+
+ * This function disables the interrupt in the NVIC. The difference with
+ * PINT_DisableCallbackByIndex() is that PINT_DisableCallbackByIndex() not
+ * only disables the interrupt in the NVIC but also clears pending interrupts.
+ * Use this function together with PINT_EnableInterruptByIndex() to
+ * temporarily disable/enable the pin interrupt.
+ * Use PINT_DisableCallbackByIndex() to disable the interrupt in a de-init function.
+ *
+ * @param base Base address of the peripheral.
+ * @param pinIdx pin index.
+ *
+ * @retval None.
+ */
+void PINT_DisableInterruptByIndex(PINT_Type *base, pint_pin_int_t pintIdx);
+
+/*!
  * @brief disable callback by pin index.
 
  * This function disables callback by pin index instead of disabling all pins.
@@ -617,6 +652,13 @@ void PINT_EnableCallbackByIndex(PINT_Type *base, pint_pin_int_t pintIdx);
  * @retval None.
  */
 void PINT_DisableCallbackByIndex(PINT_Type *base, pint_pin_int_t pintIdx);
+
+/*!
+ * @brief PINT parameterized IRQ handler entry.
+ *
+ * @param instance PINT instance index.
+ */
+void PINT_DriverIRQHandler(uint32_t instance);
 
 #ifdef __cplusplus
 }

@@ -8,19 +8,7 @@
 #define FSL_SMARTDMA_H_
 
 #include "fsl_common.h"
-
-#if defined(MIMXRT533S_SERIES) || defined(MIMXRT555S_SERIES) || defined(MIMXRT595S_cm33_SERIES)
-#include "fsl_smartdma_rt500.h"
-#elif defined(MCXN546_cm33_core0_SERIES) || defined(MCXN546_cm33_core1_SERIES) ||                                     \
-    defined(MCXN547_cm33_core0_SERIES) || defined(MCXN547_cm33_core1_SERIES) || defined(MCXN946_cm33_core0_SERIES) || \
-    defined(MCXN946_cm33_core1_SERIES) || defined(MCXN947_cm33_core0_SERIES) || defined(MCXN947_cm33_core1_SERIES) || \
-    defined(MCXN236_SERIES) || defined(MCXN235_SERIES)
-#include "fsl_smartdma_mcxn.h"
-#elif defined(MCXA345_SERIES) || defined(MCXA346_SERIES) || defined(MCXA276_SERIES)
-#include "fsl_smartdma_mcxa.h"
-#else
-#error "Device not supported"
-#endif
+#include "fsl_smartdma_fw.h"
 
 /*!
  * @addtogroup smartdma
@@ -34,7 +22,7 @@
 /*! @name Driver version */
 /*@{*/
 /*! @brief SMARTDMA driver version */
-#define FSL_SMARTDMA_DRIVER_VERSION (MAKE_VERSION(2, 13, 0))
+#define FSL_SMARTDMA_DRIVER_VERSION (MAKE_VERSION(2, 14, 0))
 /*@}*/
 
 /*! @brief Callback function prototype for the smartdma driver. */

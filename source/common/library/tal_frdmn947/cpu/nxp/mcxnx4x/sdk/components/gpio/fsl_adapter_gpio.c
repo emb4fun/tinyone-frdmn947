@@ -1,5 +1,5 @@
 /*
- * Copyright 2018 - 2019, 2023 NXP
+ * Copyright 2018 - 2019, 2023, 2026 NXP
  *
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -101,7 +101,7 @@ static void HAL_GpioInterruptHandle(uint8_t port)
 #else
     pinInterruptSetFlag = GPIO_GpioGetInterruptFlags(s_GpioPort[port]);
     /* Clear external interrupt flag. */
-    GPIO_GpioClearInterruptFlags(s_GpioPort[port], pinInterruptSetFlag);
+    (void)GPIO_GpioClearInterruptFlags(s_GpioPort[port], pinInterruptSetFlag);
 #endif
     if (0U != pinInterruptSetFlag)
     {
@@ -125,6 +125,18 @@ static void HAL_GpioInterruptHandle(uint8_t port)
         }
     }
 }
+
+#define HAL_GPIO_INTERRUPT_HANDLE(base)                                                         \
+    {                                                                                           \
+        for (uint8_t instance = 0; instance < ARRAY_SIZE(s_GpioPort); instance++)               \
+        {                                                                                       \
+            if (MSDK_REG_NONSECURE_ADDR(s_GpioPort[instance]) == MSDK_REG_NONSECURE_ADDR(base)) \
+            {                                                                                   \
+                HAL_GpioInterruptHandle(instance);                                              \
+                break;                                                                          \
+            }                                                                                   \
+        }                                                                                       \
+    }
 
 #if (defined(HAL_GPIO_CONFLICT_CHECK_ENABLE) && (HAL_GPIO_CONFLICT_CHECK_ENABLE > 0U))
 static hal_gpio_status_t HAL_GpioConflictSearch(hal_gpio_state_t *head, uint8_t port, uint8_t pin)
@@ -543,6 +555,104 @@ void GPIO3_IRQHandler(void)
 }
 #endif
 
+#if defined(HSP__GPIO_0)
+void HSP_GPIO0_CH0_IRQHandler(void);
+void HSP_GPIO0_CH0_IRQHandler(void)
+{
+    HAL_GPIO_INTERRUPT_HANDLE(HSP__GPIO_0);
+    SDK_ISR_EXIT_BARRIER;
+}
+void HSP_GPIO0_CH1_IRQHandler(void);
+void HSP_GPIO0_CH1_IRQHandler(void)
+{
+    HSP_GPIO0_CH0_IRQHandler();
+}
+#endif /* HSP__GPIO_0 */
+
+#if defined(HSP__GPIO_1)
+void HSP_GPIO1_CH0_IRQHandler(void);
+void HSP_GPIO1_CH0_IRQHandler(void)
+{
+    HAL_GPIO_INTERRUPT_HANDLE(HSP__GPIO_1);
+    SDK_ISR_EXIT_BARRIER;
+}
+void HSP_GPIO1_CH1_IRQHandler(void);
+void HSP_GPIO1_CH1_IRQHandler(void)
+{
+    HSP_GPIO1_CH0_IRQHandler();
+}
+#endif /* HSP__GPIO_1 */
+
+#if defined(HSP__GPIO_2)
+void HSP_GPIO2_CH0_IRQHandler(void);
+void HSP_GPIO2_CH0_IRQHandler(void)
+{
+    HAL_GPIO_INTERRUPT_HANDLE(HSP__GPIO_2);
+    SDK_ISR_EXIT_BARRIER;
+}
+void HSP_GPIO2_CH1_IRQHandler(void);
+void HSP_GPIO2_CH1_IRQHandler(void)
+{
+    HSP_GPIO2_CH0_IRQHandler();
+}
+#endif /* HSP__GPIO_2 */
+
+#if defined(HSP__GPIO_3)
+void HSP_GPIO3_CH0_IRQHandler(void);
+void HSP_GPIO3_CH0_IRQHandler(void)
+{
+    HAL_GPIO_INTERRUPT_HANDLE(HSP__GPIO_3);
+    SDK_ISR_EXIT_BARRIER;
+}
+void HSP_GPIO3_CH1_IRQHandler(void);
+void HSP_GPIO3_CH1_IRQHandler(void)
+{
+    HSP_GPIO3_CH0_IRQHandler();
+}
+#endif /* HSP__GPIO_3 */
+
+#if defined(HSP__GPIO_4)
+void HSP_GPIO4_CH0_IRQHandler(void);
+void HSP_GPIO4_CH0_IRQHandler(void)
+{
+    HAL_GPIO_INTERRUPT_HANDLE(HSP__GPIO_4);
+    SDK_ISR_EXIT_BARRIER;
+}
+void HSP_GPIO4_CH1_IRQHandler(void);
+void HSP_GPIO4_CH1_IRQHandler(void)
+{
+    HSP_GPIO4_CH0_IRQHandler();
+}
+#endif /* HSP__GPIO_4 */
+
+#if defined(VBAT__GPIO)
+void VBAT_GPIO_CH0_IRQHandler(void);
+void VBAT_GPIO_CH0_IRQHandler(void)
+{
+    HAL_GPIO_INTERRUPT_HANDLE(VBAT__GPIO);
+    SDK_ISR_EXIT_BARRIER;
+}
+void VBAT_GPIO_CH1_IRQHandler(void);
+void VBAT_GPIO_CH1_IRQHandler(void)
+{
+    VBAT_GPIO_CH0_IRQHandler();
+}
+#endif /* VBAT__GPIO */
+
+#if defined(WAKE__GPIO)
+void WAKE_GPIO_CH0_IRQHandler(void);
+void WAKE_GPIO_CH0_IRQHandler(void)
+{
+    HAL_GPIO_INTERRUPT_HANDLE(WAKE__GPIO);
+    SDK_ISR_EXIT_BARRIER;
+}
+void WAKE_GPIO_CH1_IRQHandler(void);
+void WAKE_GPIO_CH1_IRQHandler(void)
+{
+    WAKE_GPIO_CH0_IRQHandler();
+}
+#endif /* WAKE__GPIO */
+
 #endif
 
 void HAL_GpioPreInit(void)
@@ -555,8 +665,8 @@ hal_gpio_status_t HAL_GpioInit(hal_gpio_handle_t gpioHandle, hal_gpio_pin_config
     hal_gpio_state_t *gpioState;
     hal_gpio_status_t status;
 
-    assert(gpioHandle);
-    assert(pinConfig);
+    assert(gpioHandle != NULL);
+    assert(pinConfig != NULL);
     assert(HAL_GPIO_HANDLE_SIZE >= sizeof(hal_gpio_state_t));
 
     gpioState = (hal_gpio_state_t *)gpioHandle;
@@ -585,7 +695,7 @@ hal_gpio_status_t HAL_GpioDeinit(hal_gpio_handle_t gpioHandle)
 {
     hal_gpio_state_t *gpioState;
 
-    assert(gpioHandle);
+    assert(gpioHandle != NULL);
 
     gpioState = (hal_gpio_state_t *)gpioHandle;
     if (kHAL_GpioDirectionIn == gpioState->direction)
@@ -600,8 +710,8 @@ hal_gpio_status_t HAL_GpioGetInput(hal_gpio_handle_t gpioHandle, uint8_t *pinSta
 {
     hal_gpio_state_t *gpioState;
 
-    assert(gpioHandle);
-    assert(pinState);
+    assert(gpioHandle != NULL);
+    assert(pinState != NULL);
 
     gpioState = (hal_gpio_state_t *)gpioHandle;
 
@@ -613,7 +723,7 @@ hal_gpio_status_t HAL_GpioSetOutput(hal_gpio_handle_t gpioHandle, uint8_t pinSta
 {
     hal_gpio_state_t *gpioState;
 
-    assert(gpioHandle);
+    assert(gpioHandle != NULL);
 
     gpioState = (hal_gpio_state_t *)gpioHandle;
 
@@ -627,7 +737,7 @@ hal_gpio_status_t HAL_GpioInstallCallback(hal_gpio_handle_t gpioHandle,
 {
     hal_gpio_state_t *gpioState;
 
-    assert(gpioHandle);
+    assert(gpioHandle != NULL);
 
     gpioState = (hal_gpio_state_t *)gpioHandle;
 
@@ -641,7 +751,7 @@ hal_gpio_status_t HAL_GpioGetTriggerMode(hal_gpio_handle_t gpioHandle, hal_gpio_
 {
     hal_gpio_state_t *gpioState;
 
-    assert(gpioHandle);
+    assert(gpioHandle != NULL);
 
     gpioState = (hal_gpio_state_t *)gpioHandle;
 
@@ -667,7 +777,7 @@ hal_gpio_status_t HAL_GpioSetTriggerMode(hal_gpio_handle_t gpioHandle, hal_gpio_
     static const IRQn_Type irqNo[] = GPIO_IRQS;
 #endif
 
-    assert(gpioHandle);
+    assert(gpioHandle != NULL);
 
     gpioState = (hal_gpio_state_t *)gpioHandle;
     assert(kHAL_GpioDirectionOut != gpioState->direction);
@@ -743,7 +853,7 @@ hal_gpio_status_t HAL_GpioWakeUpSetting(hal_gpio_handle_t gpioHandle, uint8_t en
 {
     hal_gpio_state_t *gpioState;
 
-    assert(gpioHandle);
+    assert(gpioHandle != NULL);
 
     gpioState = (hal_gpio_state_t *)gpioHandle;
 
@@ -761,7 +871,7 @@ hal_gpio_status_t HAL_GpioWakeUpSetting(hal_gpio_handle_t gpioHandle, uint8_t en
 
 hal_gpio_status_t HAL_GpioEnterLowpower(hal_gpio_handle_t gpioHandle)
 {
-    assert(gpioHandle);
+    assert(gpioHandle != NULL);
 
     return kStatus_HAL_GpioSuccess;
 }
@@ -774,7 +884,7 @@ hal_gpio_status_t HAL_GpioExitLowpower(hal_gpio_handle_t gpioHandle)
         0,
     };
 
-    assert(gpioHandle);
+    assert(gpioHandle != NULL);
 
     gpioState                  = (hal_gpio_state_t *)gpioHandle;
     gpioPinconfig.pinDirection = kGPIO_DigitalInput;

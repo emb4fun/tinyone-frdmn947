@@ -21,6 +21,11 @@
 #ifndef SD_CMD13_RETRY_TIMES
 #define SD_CMD13_RETRY_TIMES (10)
 #endif
+/*! @brief Retry times to check DAT low after CMD11. */
+#ifndef SD_CMD11_DAT_LOW_RETRY_TIMES
+#define SD_CMD11_DAT_LOW_RETRY_TIMES (100)
+#endif
+
 /*******************************************************************************
  * Prototypes
  ******************************************************************************/
@@ -404,10 +409,20 @@ static status_t SD_SwitchVoltage(sd_card_t *card, sdmmc_operation_voltage_t volt
         return kStatus_SDMMC_TransferFailed;
     }
 
-    /* check data line and cmd line status */
-    if (SDMMCHOST_GetSignalLineStatus(card->host, (uint32_t)kSDMMC_SignalLineData0 | (uint32_t)kSDMMC_SignalLineData1 |
-                                                      (uint32_t)kSDMMC_SignalLineData2 |
-                                                      (uint32_t)kSDMMC_SignalLineData3) != 0U)
+    /* Wait for DAT lines to go low after CMD11 (card drives them low). */
+    uint32_t datLines = 0xFFU;
+    for (uint32_t retries = 0; retries < SD_CMD11_DAT_LOW_RETRY_TIMES; retries++)
+    {
+        SDMMC_OSADelay(1U);
+        datLines = SDMMCHOST_GetSignalLineStatus(card->host,
+            (uint32_t)kSDMMC_SignalLineData0 | (uint32_t)kSDMMC_SignalLineData1 |
+            (uint32_t)kSDMMC_SignalLineData2 | (uint32_t)kSDMMC_SignalLineData3);
+        if (datLines == 0U)
+        {
+            break;
+        }
+    }
+    if (datLines != 0U)
     {
         return kStatus_SDMMC_SwitchVoltageFail;
     }
@@ -513,6 +528,8 @@ static status_t SD_Transfer(sd_card_t *card, sdmmchost_transfer_t *content, uint
         {
             if ((card->currentTiming == kSD_TimingSDR50Mode) || (card->currentTiming == kSD_TimingSDR104Mode))
             {
+                assert(retuningCount >= 1U);
+
                 if (--retuningCount == 0U)
                 {
                     break;
@@ -591,10 +608,12 @@ static status_t SD_SendCardStatus(sd_card_t *card)
 status_t SD_PollingCardStatusBusy(sd_card_t *card, uint32_t timeoutMs)
 {
     assert(card != NULL);
+    assert(timeoutMs <= UINT32_MAX / 1000U);
 
     uint32_t statusTimeoutUs = timeoutMs * 1000U;
     bool cardBusy            = false;
     status_t error           = kStatus_SDMMC_CardStatusBusy;
+    uint32_t delay;
 
     do
     {
@@ -611,7 +630,9 @@ status_t SD_PollingCardStatusBusy(sd_card_t *card, uint32_t timeoutMs)
         else
         {
             /* Delay 125us to throttle the polling rate */
-            statusTimeoutUs -= SDMMC_OSADelayUs(125U);
+            delay = SDMMC_OSADelayUs(125U);
+            assert(statusTimeoutUs >= delay);
+            statusTimeoutUs -= delay;
         }
 
     } while (statusTimeoutUs != 0U);
@@ -702,6 +723,8 @@ static status_t SD_SwitchFunction(sd_card_t *card, uint32_t mode, uint32_t group
     sdmmchost_cmd_t command      = {0};
     sdmmchost_data_t data        = {0};
     status_t error               = kStatus_Success;
+
+    assert(group <= kSD_GroupCurrentLimit);
 
     command.index    = (uint32_t)kSD_Switch;
     command.argument = (mode << 31U | 0x00FFFFFFU);
@@ -866,11 +889,11 @@ static status_t SD_SelectFunction(sd_card_t *card, uint32_t group, uint32_t func
        -Check if function 1(high speed) in function group 1 is supported by checking if bit 401 is set;
        -check if function 1 is ready and can be switched by checking if bits 379~376 equal value 1;
      */
-    functionGroupInfo[5U] = (uint16_t)functionStatus[0U];
+    functionGroupInfo[5U] = (uint16_t)(functionStatus[0U] & 0xFFFFUL);
     functionGroupInfo[4U] = (uint16_t)(functionStatus[1U] >> 16U);
-    functionGroupInfo[3U] = (uint16_t)(functionStatus[1U]);
+    functionGroupInfo[3U] = (uint16_t)(functionStatus[1U] & 0xFFFFUL);
     functionGroupInfo[2U] = (uint16_t)(functionStatus[2U] >> 16U);
-    functionGroupInfo[1U] = (uint16_t)(functionStatus[2U]);
+    functionGroupInfo[1U] = (uint16_t)(functionStatus[2U] & 0xFFFFUL);
     functionGroupInfo[0U] = (uint16_t)(functionStatus[3U] >> 16U);
     currentFunctionStatus = ((functionStatus[3U] & 0xFFU) << 8U) | (functionStatus[4U] >> 24U);
 
@@ -1020,7 +1043,7 @@ static void SD_DecodeCsd(sd_card_t *card, uint32_t *rawCsd)
     }
     csd->eraseSectorSize       = (uint8_t)((rawCsd[1U] & 0x3F80U) >> 7U);
     csd->writeProtectGroupSize = (uint8_t)(rawCsd[1U] & 0x7FU);
-    if ((uint8_t)(rawCsd[0U] & 0x80000000U) != 0U)
+    if ((uint8_t)((rawCsd[0U] & 0x80000000U) >> 31U) != 0U)
     {
         csd->flags |= (uint16_t)kSD_CsdWriteProtectGroupEnabledFlag;
     }
@@ -1592,6 +1615,7 @@ static status_t SD_Erase(sd_card_t *card, uint32_t startBlock, uint32_t blockCou
     }
 
     eraseBlockStart = startBlock;
+    assert(eraseBlockStart <= UINT32_MAX - blockCount);
     eraseBlockEnd   = eraseBlockStart + blockCount - 1U;
     if (0U == (card->flags & (uint32_t)kSD_SupportHighCapacityFlag))
     {
@@ -1669,6 +1693,7 @@ status_t SD_ReadBlocks(sd_card_t *card, uint8_t *buffer, uint32_t startBlock, ui
     assert(card != NULL);
     assert(buffer != NULL);
     assert(blockCount != 0U);
+    assert(blockCount <= UINT32_MAX - startBlock);
     assert((blockCount + startBlock) <= card->blockCount);
 
     uint32_t blockLeft;
@@ -1685,8 +1710,10 @@ status_t SD_ReadBlocks(sd_card_t *card, uint8_t *buffer, uint32_t startBlock, ui
 
     while (blockLeft != 0U)
     {
+        assert(blockDone <= UINT32_MAX / FSL_SDMMC_DEFAULT_BLOCK_SIZE);
+
         nextBuffer = (uint8_t *)((uint32_t)buffer + blockDone * FSL_SDMMC_DEFAULT_BLOCK_SIZE);
-        if ((!card->noInteralAlign) && (!dataAddrAlign || ((((uint32_t)nextBuffer) & (sizeof(uint32_t) - 1U)) != 0U)))
+        if ((!card->noInteralAlign) && (!dataAddrAlign || ((((uint32_t)nextBuffer) & (SDMMC_DATA_BUFFER_ALIGN_CACHE - 1U)) != 0U)))
         {
             blockCountOneTime = 1;
             (void)memset(alignBuffer, 0, FSL_SDMMC_DEFAULT_BLOCK_SIZE);
@@ -1706,6 +1733,8 @@ status_t SD_ReadBlocks(sd_card_t *card, uint8_t *buffer, uint32_t startBlock, ui
                 blockLeft         = 0U;
             }
         }
+
+        assert(startBlock <= UINT32_MAX - blockDone);
 
         error = SD_Read(card, dataAddrAlign ? nextBuffer : alignBuffer, (startBlock + blockDone),
                         FSL_SDMMC_DEFAULT_BLOCK_SIZE, blockCountOneTime);
@@ -1733,6 +1762,7 @@ status_t SD_WriteBlocks(sd_card_t *card, const uint8_t *buffer, uint32_t startBl
     assert(card != NULL);
     assert(buffer != NULL);
     assert(blockCount != 0U);
+    assert(blockCount <= UINT32_MAX - startBlock);
     assert((blockCount + startBlock) <= card->blockCount);
 
     uint32_t blockCountOneTime   = 0U; /* The block count can be wrote in one time sending WRITE_BLOCKS command. */
@@ -1749,7 +1779,7 @@ status_t SD_WriteBlocks(sd_card_t *card, const uint8_t *buffer, uint32_t startBl
     while (blockLeft != 0U)
     {
         nextBuffer = (uint8_t *)((uint32_t)buffer + (blockCount - blockLeft) * FSL_SDMMC_DEFAULT_BLOCK_SIZE);
-        if (!card->noInteralAlign && (!dataAddrAlign || ((((uint32_t)nextBuffer) & (sizeof(uint32_t) - 1U)) != 0U)))
+        if (!card->noInteralAlign && (!dataAddrAlign || ((((uint32_t)nextBuffer) & (SDMMC_DATA_BUFFER_ALIGN_CACHE - 1U)) != 0U)))
         {
             blockCountOneTime = 1;
             (void)memcpy(alignBuffer, nextBuffer, FSL_SDMMC_DEFAULT_BLOCK_SIZE);
@@ -1775,6 +1805,8 @@ status_t SD_WriteBlocks(sd_card_t *card, const uint8_t *buffer, uint32_t startBl
             break;
         }
 
+        assert(blockLeft >= blockWrittenOneTime);
+
         blockLeft -= blockWrittenOneTime;
 
         if ((!card->noInteralAlign) && !dataAddrAlign)
@@ -1792,6 +1824,7 @@ status_t SD_EraseBlocks(sd_card_t *card, uint32_t startBlock, uint32_t blockCoun
 {
     assert(card != NULL);
     assert(blockCount != 0U);
+    assert(blockCount <= UINT32_MAX - startBlock);
     assert((blockCount + startBlock) <= card->blockCount);
 
     status_t error                 = kStatus_Success;
@@ -1831,9 +1864,13 @@ status_t SD_EraseBlocks(sd_card_t *card, uint32_t startBlock, uint32_t blockCoun
         auTimeout = (((uint32_t)card->stat.eraseTimeout * 1000U) / (uint32_t)card->stat.eraseSize) +
                     card->stat.eraseOffset * 1000U;
 
+        assert(startBlock / auBlocks <= UINT32_MAX - 1U);
+        assert(startBlock / auBlocks + 1U <= UINT32_MAX / auBlocks);
+
         /* erase blocks within one AU */
         if ((startBlock + blockCount) < (startBlock / auBlocks + 1U) * auBlocks)
         {
+            assert(auTimeout <= UINT32_MAX - 500U);
             error = SD_Erase(card, startBlock, blockCount, auTimeout + 500U);
 
             SDMMC_LOG("\r\n erase blockS within AU : total %d, start %d, timeout %d, status %d \r\n", blockCount,
@@ -1844,6 +1881,7 @@ status_t SD_EraseBlocks(sd_card_t *card, uint32_t startBlock, uint32_t blockCoun
             /* Erase partially start block */
             if ((startBlock % auBlocks) != 0U)
             {
+                assert(auTimeout <= UINT32_MAX - 250U);
                 blockCountOneTime = (startBlock / auBlocks + 1U) * auBlocks - startBlock;
                 error             = SD_Erase(card, startBlock, blockCountOneTime, auTimeout + 250U);
 
@@ -1879,6 +1917,8 @@ status_t SD_EraseBlocks(sd_card_t *card, uint32_t startBlock, uint32_t blockCoun
                         blockLeft         = 0U;
                     }
 
+                    assert(blockCountOneTime / auBlocks <= UINT32_MAX / auTimeout);
+
                     error = SD_Erase(card, blockHead, blockCountOneTime, (blockCountOneTime / auBlocks) * auTimeout);
                     SDMMC_LOG("\r\n erase AU block head : total %d, start %d, timeout %d, status %d \r\n",
                               blockCountOneTime, blockHead, (blockCountOneTime / auBlocks) * auTimeout, error);
@@ -1894,6 +1934,7 @@ status_t SD_EraseBlocks(sd_card_t *card, uint32_t startBlock, uint32_t blockCoun
             /* Erase partially end block */
             if ((error == kStatus_Success) && (blockTail))
             {
+                assert(auTimeout <= UINT32_MAX - 250U);
                 error = SD_Erase(card, blockHead, blockTail, auTimeout + 250U);
                 SDMMC_LOG("\r\n erase partially tail block : total %d, start %d, timeout %d, status %d \r\n", blockTail,
                           blockHead, auTimeout + 250U, error);

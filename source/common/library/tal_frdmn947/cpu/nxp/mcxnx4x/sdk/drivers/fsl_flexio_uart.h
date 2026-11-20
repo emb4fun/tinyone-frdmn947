@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015-2016, Freescale Semiconductor, Inc.
- * Copyright 2016-2021, 2025 NXP
+ * Copyright 2016-2021, 2025-2026 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -24,12 +24,16 @@
 /*! @name Driver version */
 /*! @{ */
 /*! @brief FlexIO UART driver version. */
-#define FSL_FLEXIO_UART_DRIVER_VERSION (MAKE_VERSION(2, 6, 2))
+#define FSL_FLEXIO_UART_DRIVER_VERSION (MAKE_VERSION(2, 6, 5))
 /*! @} */
 
 /*! @brief Retry times for waiting flag. */
 #ifndef UART_RETRY_TIMES
-#define UART_RETRY_TIMES 0U /* Defining to zero means to keep waiting for the flag until it is assert/deassert. */
+#ifdef CONFIG_UART_RETRY_TIMES
+#define UART_RETRY_TIMES CONFIG_UART_RETRY_TIMES
+#else
+#define UART_RETRY_TIMES 0U /* Define to zero means keep waiting until the flag is assert/deassert. */
+#endif
 #endif
 
 /*! @brief Error codes for the UART driver. */

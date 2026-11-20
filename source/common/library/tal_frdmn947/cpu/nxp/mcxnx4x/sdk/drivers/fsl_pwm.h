@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015, Freescale Semiconductor, Inc.
- * Copyright 2016-2022, 2024 NXP
+ * Copyright 2016-2022, 2024-2026 NXP
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -19,13 +19,13 @@
  ******************************************************************************/
 /*! @name Driver version */
 /*! @{ */
-#define FSL_PWM_DRIVER_VERSION (MAKE_VERSION(2, 9, 0)) /*!< Version 2.9.0 */
+#define FSL_PWM_DRIVER_VERSION (MAKE_VERSION(2, 10, 1)) /*!< Version 2.10.1 */
 /*! @} */
 
 /*! Number of bits per submodule for software output control */
-#define PWM_SUBMODULE_SWCONTROL_WIDTH 2
+#define PWM_SUBMODULE_SWCONTROL_WIDTH 2U
 /*! Submodule channels include PWMA, PWMB, PWMX. */
-#define PWM_SUBMODULE_CHANNEL 3
+#define PWM_SUBMODULE_CHANNEL 3U
 
 /*! @brief List of PWM submodules */
 typedef enum _pwm_submodule
@@ -71,7 +71,7 @@ enum _pwm_value_register_mask
 /*! @brief PWM clock source selection.*/
 typedef enum _pwm_clock_source
 {
-    kPWM_BusClock = 0U,  /*!< The IPBus clock is used as the clock */
+    kPWM_BusClock = 0U,  /*!< Device specific IPBus clock, refer reference manual for frequency */
     kPWM_ExternalClock,  /*!< EXT_CLK is used as the clock */
     kPWM_Submodule0Clock /*!< Clock of the submodule 0 (AUX_CLK) is used as the source clock */
 } pwm_clock_source_t;
@@ -165,7 +165,9 @@ typedef enum _pwm_fault_disable
 typedef enum _pwm_fault_channels
 {
     kPWM_faultchannel_0 = 0U,
+#if defined(FSL_FEATURE_PWM_FAULT_CH_COUNT) && (FSL_FEATURE_PWM_FAULT_CH_COUNT > 1)
     kPWM_faultchannel_1
+#endif
 } pwm_fault_channels_t;
 
 /*! @brief PWM capture edge select */
@@ -238,7 +240,13 @@ typedef enum _pwm_interrupt_enable
     kPWM_Fault0InterruptEnable      = (1U << 16), /*!< PWM fault 0 interrupt */
     kPWM_Fault1InterruptEnable      = (1U << 17), /*!< PWM fault 1 interrupt */
     kPWM_Fault2InterruptEnable      = (1U << 18), /*!< PWM fault 2 interrupt */
-    kPWM_Fault3InterruptEnable      = (1U << 19)  /*!< PWM fault 3 interrupt */
+    kPWM_Fault3InterruptEnable      = (1U << 19), /*!< PWM fault 3 interrupt */
+#if defined(FSL_FEATURE_PWM_FAULT_CH_COUNT) && (FSL_FEATURE_PWM_FAULT_CH_COUNT > 1)
+    kPWM_Fault4InterruptEnable      = (1U << 20), /*!< PWM fault 4 interrupt */
+    kPWM_Fault5InterruptEnable      = (1U << 21), /*!< PWM fault 5 interrupt */
+    kPWM_Fault6InterruptEnable      = (1U << 22), /*!< PWM fault 6 interrupt */
+    kPWM_Fault7InterruptEnable      = (1U << 23), /*!< PWM fault 7 interrupt */
+#endif
 } pwm_interrupt_enable_t;
 
 /*! @brief List of PWM status flags */
@@ -268,7 +276,13 @@ typedef enum _pwm_status_flags
     kPWM_Fault0Flag      = (1U << 16), /*!< PWM fault 0 flag */
     kPWM_Fault1Flag      = (1U << 17), /*!< PWM fault 1 flag */
     kPWM_Fault2Flag      = (1U << 18), /*!< PWM fault 2 flag */
-    kPWM_Fault3Flag      = (1U << 19)  /*!< PWM fault 3 flag */
+    kPWM_Fault3Flag      = (1U << 19), /*!< PWM fault 3 flag */
+#if defined(FSL_FEATURE_PWM_FAULT_CH_COUNT) && (FSL_FEATURE_PWM_FAULT_CH_COUNT > 1)
+    kPWM_Fault4Flag      = (1U << 20), /*!< PWM fault 4 flag */
+    kPWM_Fault5Flag      = (1U << 21), /*!< PWM fault 5 flag */
+    kPWM_Fault6Flag      = (1U << 22), /*!< PWM fault 6 flag */
+    kPWM_Fault7Flag      = (1U << 23), /*!< PWM fault 7 flag */
+#endif
 } pwm_status_flags_t;
 
 /*! @brief List of PWM DMA options */
@@ -642,7 +656,28 @@ void PWM_SetupInputCapture(PWM_Type *base,
                            const pwm_input_capture_param_t *inputCaptureParams);
 
 /*!
- * @brief Sets up the PWM fault input filter.
+ * @brief Read the capture value.
+ *
+ * This function reads the capture value stored in channel's capture value register.
+ * It should be called when a valid edge is detected on the input capture pin(related capture flag is set).
+ * The capture circuit has two input capture registers per channel for first edge and second edge capture.
+ *
+ * @param base         PWM peripheral base address
+ * @param subModule    PWM submodule to configure
+ * @param pwmChannel   PWM channel to read from (PWM A, PWM B, or PWM X)
+ * @param captureIndex Capture register to read (0 for first edge capture, 1 for second edge capture)
+ *
+ * @return Returns kStatus_InvalidArgument if pwmChannel does not support capture feature;
+ *         kStatus_Success otherwise
+ */
+status_t PWM_GetInputCaptureValue(PWM_Type *base,
+                                  pwm_submodule_t subModule,
+                                  pwm_channels_t pwmChannel,
+                                  uint8_t captureIndex,
+                                  uint16_t *captureValue);
+
+/*!
+ * @brief Sets up the PWM fault channel 0 input filter.
  *
  * @param base                   PWM peripheral base address
  * @param faultInputFilterParams Parameters passed in to set up the fault input filter.
@@ -650,15 +685,37 @@ void PWM_SetupInputCapture(PWM_Type *base,
 void PWM_SetupFaultInputFilter(PWM_Type *base, const pwm_fault_input_filter_param_t *faultInputFilterParams);
 
 /*!
- * @brief Sets up the PWM fault protection.
+ * @brief Sets up the PWM fault input filter.
  *
- * PWM has 4 fault inputs.
+ * @param base                   PWM peripheral base address
+ * @param faultChannel           PWM fault channel to configure.
+ * @param faultInputFilterParams Parameters passed in to set up the fault input filter.
+ */
+void PWM_SetupFaultInputFilterExt(PWM_Type *base,
+                                  pwm_fault_channels_t faultChannel,
+                                  const pwm_fault_input_filter_param_t *faultInputFilterParams);
+
+/*!
+ * @brief Sets up the PWM fault channel 0 protection.
  *
  * @param base        PWM peripheral base address
  * @param faultNum    PWM fault to configure.
  * @param faultParams Pointer to the PWM fault config structure
  */
 void PWM_SetupFaults(PWM_Type *base, pwm_fault_input_t faultNum, const pwm_fault_param_t *faultParams);
+
+/*!
+ * @brief Sets up the PWM fault protection.
+ *
+ * @param base         PWM peripheral base address
+ * @param faultChannel PWM fault channel to configure.
+ * @param faultNum     PWM fault to configure.
+ * @param faultParams  Pointer to the PWM fault config structure
+ */
+void PWM_SetupFaultsExt(PWM_Type *base,
+                        pwm_fault_channels_t faultChannel,
+                        pwm_fault_input_t faultNum,
+                        const pwm_fault_param_t *faultParams);
 
 /*!
  * @brief  Fill in the PWM fault config struct with the default settings
@@ -691,6 +748,43 @@ void PWM_SetupForceSignal(PWM_Type *base,
                           pwm_force_signal_t mode);
 
 /*!
+ * @brief Enables local software force initialization on a PWM submodule.
+ *
+ * This function performs a software-controlled initialization, causes a FORCE_OUT
+ * event which latches all double-buffered fields (DTSRCSEL, MCTRL[IPOL], SWCOUT)
+ * into their active registers and, if MCTRL[LDOK] is set, also triggers a register reload.
+ *
+ * Call this function after updating the desired buffered registers (e.g. after
+ * PWM_SetupForceSignal()) to apply the new values synchronously.
+ *
+ * @param base      PWM peripheral base address
+ * @param subModule PWM submodule to enable local force on
+ */
+static inline void PWM_EnableLocalForce(PWM_Type *base, pwm_submodule_t subModule)
+{
+    /* Select local FORCE signal source (FORCE_SEL = 000) */
+    base->SM[subModule].CTRL2 &= MCUX_MASK_INVERT_16(PWM_CTRL2_FORCE_SEL_MASK);
+    /* Enable local force (FORCE = 1): software-controlled initialization + shadow register latch */
+    base->SM[subModule].CTRL2 |= PWM_CTRL2_FORCE_MASK;
+}
+
+/*!
+ * @brief Updates the current polarity (MCTRL[IPOL]) for a PWM submodule.
+ *
+ * MCTRL[IPOL] is a double-buffered field. This function only writes the shadow register;
+ * the value does NOT take effect until a FORCE_OUT event occurs. Call PWM_EnableLocalForce()
+ * after this function to apply all pending changes atomically in one FORCE_OUT event.
+ *
+ * Only meaningful when the submodule operates in complementary mode (CTRL2[INDEP] = 0).
+ *
+ * @param base      PWM peripheral base address
+ * @param subModule PWM submodule to configure
+ * @param polarity  kPWM_ComplementaryPwmA: PWM23 (VAL2/VAL3) drives the complementary pair
+ *                  kPWM_ComplementaryPwmB: PWM45 (VAL4/VAL5) drives the complementary pair
+ */
+void PWM_UpdateCurrentPolarity(PWM_Type *base, pwm_submodule_t subModule, pwm_chnl_pair_operation_t polarity);
+
+/*!
  * @name Interrupts Interface
  * @{
  */
@@ -706,9 +800,14 @@ void PWM_SetupForceSignal(PWM_Type *base,
 static inline void PWM_EnableInterrupts(PWM_Type *base, pwm_submodule_t subModule, uint32_t mask)
 {
     /* Upper 16 bits are for related to the submodule */
-    base->SM[subModule].INTEN |= ((uint16_t)mask & 0xFFFFU);
+    base->SM[subModule].INTEN |= (uint16_t)(mask & 0xFFFFUL);
     /* Fault related interrupts */
+#if defined(FSL_FEATURE_PWM_FAULT_CH_COUNT) && (FSL_FEATURE_PWM_FAULT_CH_COUNT > 1)
+    base->FAULT[0].FCTRL |= ((uint16_t)(mask >> 16U) & PWM_FCTRL_FIE_MASK);
+    base->FAULT[1].FCTRL |= ((uint16_t)(mask >> 20U) & PWM_FCTRL_FIE_MASK);
+#else
     base->FCTRL |= ((uint16_t)(mask >> 16U) & PWM_FCTRL_FIE_MASK);
+#endif
 }
 
 /*!
@@ -721,8 +820,13 @@ static inline void PWM_EnableInterrupts(PWM_Type *base, pwm_submodule_t subModul
  */
 static inline void PWM_DisableInterrupts(PWM_Type *base, pwm_submodule_t subModule, uint32_t mask)
 {
-    base->SM[subModule].INTEN &= ~((uint16_t)mask & 0xFFFFU);
-    base->FCTRL &= ~((uint16_t)(mask >> 16U) & PWM_FCTRL_FIE_MASK);
+    base->SM[subModule].INTEN &= MCUX_MASK_INVERT_16(mask & 0xFFFFUL);
+#if defined(FSL_FEATURE_PWM_FAULT_CH_COUNT) && (FSL_FEATURE_PWM_FAULT_CH_COUNT > 1)
+    base->FAULT[0].FCTRL &= MCUX_MASK_INVERT_16((uint16_t)(mask >> 16U) & PWM_FCTRL_FIE_MASK);
+    base->FAULT[1].FCTRL &= MCUX_MASK_INVERT_16((uint16_t)(mask >> 20U) & PWM_FCTRL_FIE_MASK);
+#else
+    base->FCTRL &= MCUX_MASK_INVERT_16((uint16_t)(mask >> 16U) & PWM_FCTRL_FIE_MASK);
+#endif
 }
 
 /*!
@@ -739,7 +843,12 @@ static inline uint32_t PWM_GetEnabledInterrupts(PWM_Type *base, pwm_submodule_t 
     uint32_t enabledInterrupts;
 
     enabledInterrupts = base->SM[subModule].INTEN;
+#if defined(FSL_FEATURE_PWM_FAULT_CH_COUNT) && (FSL_FEATURE_PWM_FAULT_CH_COUNT > 1)
+    enabledInterrupts |= (((uint32_t)base->FAULT[0].FCTRL & PWM_FCTRL_FIE_MASK) << 16UL);
+    enabledInterrupts |= (((uint32_t)base->FAULT[1].FCTRL & PWM_FCTRL_FIE_MASK) << 20UL);
+#else
     enabledInterrupts |= (((uint32_t)base->FCTRL & PWM_FCTRL_FIE_MASK) << 16UL);
+#endif
     return enabledInterrupts;
 }
 
@@ -764,11 +873,11 @@ static inline void PWM_DMAFIFOWatermarkControl(PWM_Type *base,
     uint16_t reg = base->SM[subModule].DMAEN;
     if (pwm_watermark_control == kPWM_FIFOWatermarksOR)
     {
-        reg &= ~((uint16_t)PWM_DMAEN_FAND_MASK);
+        MCUX_REG_BIT_CLEAR16(reg, PWM_DMAEN_FAND_MASK);
     }
     else
     {
-        reg |= ((uint16_t)PWM_DMAEN_FAND_MASK);
+        MCUX_REG_BIT_SET16(reg, PWM_DMAEN_FAND_MASK);
     }
     base->SM[subModule].DMAEN = reg;
 }
@@ -786,7 +895,8 @@ static inline void PWM_DMACaptureSourceSelect(PWM_Type *base,
 {
     uint16_t reg = base->SM[subModule].DMAEN;
 
-    reg &= ~((uint16_t)PWM_DMAEN_CAPTDE_MASK);
+    MCUX_REG_BIT_CLEAR16(reg, PWM_DMAEN_CAPTDE_MASK);
+
     reg |= (((uint16_t)pwm_dma_source_select << (uint16_t)PWM_DMAEN_CAPTDE_SHIFT) & (uint16_t)PWM_DMAEN_CAPTDE_MASK);
 
     base->SM[subModule].DMAEN = reg;
@@ -806,11 +916,11 @@ static inline void PWM_EnableDMACapture(PWM_Type *base, pwm_submodule_t subModul
     uint16_t reg = base->SM[subModule].DMAEN;
     if (activate)
     {
-        reg |= (uint16_t)(mask);
+        MCUX_REG_BIT_SET16(reg, mask);
     }
     else
     {
-        reg &= ~((uint16_t)(mask));
+        MCUX_REG_BIT_CLEAR16(reg, mask);
     }
     base->SM[subModule].DMAEN = reg;
 }
@@ -827,11 +937,11 @@ static inline void PWM_EnableDMAWrite(PWM_Type *base, pwm_submodule_t subModule,
     uint16_t reg = base->SM[subModule].DMAEN;
     if (activate)
     {
-        reg |= ((uint16_t)PWM_DMAEN_VALDE_MASK);
+        MCUX_REG_BIT_SET16(reg, PWM_DMAEN_VALDE_MASK);
     }
     else
     {
-        reg &= ~((uint16_t)PWM_DMAEN_VALDE_MASK);
+        MCUX_REG_BIT_CLEAR16(reg, PWM_DMAEN_VALDE_MASK);
     }
     base->SM[subModule].DMAEN = reg;
 }
@@ -857,7 +967,12 @@ static inline uint32_t PWM_GetStatusFlags(PWM_Type *base, pwm_submodule_t subMod
     uint32_t statusFlags;
 
     statusFlags = base->SM[subModule].STS;
+#if defined(FSL_FEATURE_PWM_FAULT_CH_COUNT) && (FSL_FEATURE_PWM_FAULT_CH_COUNT > 1)
+    statusFlags |= (((uint32_t)base->FAULT[0].FSTS & PWM_FSTS_FFLAG_MASK) << 16UL);
+    statusFlags |= (((uint32_t)base->FAULT[1].FSTS & PWM_FSTS_FFLAG_MASK) << 20UL);
+#else
     statusFlags |= (((uint32_t)base->FSTS & PWM_FSTS_FFLAG_MASK) << 16UL);
+#endif
 
     return statusFlags;
 }
@@ -870,19 +985,38 @@ static inline uint32_t PWM_GetStatusFlags(PWM_Type *base, pwm_submodule_t subMod
  * @param mask      The status flags to clear. This is a logical OR of members of the
  *                  enumeration ::pwm_status_flags_t
  */
+#if defined(FSL_FEATURE_PWM_FAULT_CH_COUNT) && (FSL_FEATURE_PWM_FAULT_CH_COUNT > 1)
 static inline void PWM_ClearStatusFlags(PWM_Type *base, pwm_submodule_t subModule, uint32_t mask)
 {
     uint16_t reg;
 
-    base->SM[subModule].STS = ((uint16_t)mask & 0xFFFFU);
+    base->SM[subModule].STS = (uint16_t)(mask & 0xFFFFUL);
+
+    reg = base->FAULT[0].FSTS;
+    MCUX_REG_BIT_CLEAR16(reg, PWM_FSTS_FFLAG_MASK);
+    reg |= (uint16_t)((mask >> 16U) & PWM_FSTS_FFLAG_MASK);
+    base->FAULT[0].FSTS = reg;
+
+    reg = base->FAULT[1].FSTS;
+    MCUX_REG_BIT_CLEAR16(reg, PWM_FSTS_FFLAG_MASK);
+    reg |= (uint16_t)((mask >> 20U) & PWM_FSTS_FFLAG_MASK);
+    base->FAULT[1].FSTS = reg;
+}
+#else
+static inline void PWM_ClearStatusFlags(PWM_Type *base, pwm_submodule_t subModule, uint32_t mask)
+{
+    uint16_t reg;
+
+    base->SM[subModule].STS = (uint16_t)(mask & 0xFFFFUL);
     reg                     = base->FSTS;
     /* Clear the fault flags and set only the ones we wish to clear as the fault flags are cleared
      * by writing a login one
      */
-    reg &= ~(uint16_t)(PWM_FSTS_FFLAG_MASK);
+    MCUX_REG_BIT_CLEAR16(reg, PWM_FSTS_FFLAG_MASK);
     reg |= (uint16_t)((mask >> 16U) & PWM_FSTS_FFLAG_MASK);
     base->FSTS = reg;
 }
+#endif
 
 /*! @}*/
 
@@ -918,7 +1052,7 @@ static inline void PWM_StartTimer(PWM_Type *base, uint8_t subModulesToStart)
  */
 static inline void PWM_StopTimer(PWM_Type *base, uint8_t subModulesToStop)
 {
-    base->MCTRL &= ~(PWM_MCTRL_RUN(subModulesToStop));
+    MCUX_REG_BIT_CLEAR16(base->MCTRL, PWM_MCTRL_RUN(subModulesToStop));
 }
 
 /*! @}*/
@@ -1024,6 +1158,8 @@ static inline void PWM_OutputTriggerEnable(PWM_Type *base,
                                            pwm_value_register_t valueRegister,
                                            bool activate)
 {
+    assert((uint16_t)valueRegister <= 5U);
+
     if (activate)
     {
         base->SM[subModule].TCTRL |= ((uint16_t)1U << (uint16_t)valueRegister);
@@ -1061,7 +1197,7 @@ static inline void PWM_ActivateOutputTrigger(PWM_Type *base, pwm_submodule_t sub
  */
 static inline void PWM_DeactivateOutputTrigger(PWM_Type *base, pwm_submodule_t subModule, uint16_t valueRegisterMask)
 {
-    base->SM[subModule].TCTRL &= ~(PWM_TCTRL_OUT_TRIG_EN_MASK & (valueRegisterMask));
+    base->SM[subModule].TCTRL &= MCUX_MASK_INVERT_16(PWM_TCTRL_OUT_TRIG_EN_MASK & (valueRegisterMask));
 }
 
 /*!
@@ -1077,15 +1213,17 @@ static inline void PWM_DeactivateOutputTrigger(PWM_Type *base, pwm_submodule_t s
  */
 static inline void PWM_SetupSwCtrlOut(PWM_Type *base, pwm_submodule_t subModule, pwm_channels_t pwmChannel, bool value)
 {
+    assert(pwmChannel != kPWM_PwmX);
+    uint32_t swcout = (((uint32_t)subModule * PWM_SUBMODULE_SWCONTROL_WIDTH) + (uint32_t)pwmChannel);
+    assert(swcout <= 7U);
+
     if (value)
     {
-        base->SWCOUT |=
-            ((uint16_t)1U << (((uint16_t)subModule * (uint16_t)PWM_SUBMODULE_SWCONTROL_WIDTH) + (uint16_t)pwmChannel));
+        base->SWCOUT |= ((uint16_t)1U << swcout);
     }
     else
     {
-        base->SWCOUT &=
-            ~((uint16_t)1U << (((uint16_t)subModule * (uint16_t)PWM_SUBMODULE_SWCONTROL_WIDTH) + (uint16_t)pwmChannel));
+        base->SWCOUT &= ~((uint16_t)1U << swcout);
     }
 }
 
@@ -1136,15 +1274,15 @@ static inline void PWM_SetPwmFaultState(PWM_Type *base,
     switch (pwmChannel)
     {
         case kPWM_PwmA:
-            reg &= ~((uint16_t)PWM_OCTRL_PWMAFS_MASK);
+            reg &= MCUX_MASK_INVERT_16(PWM_OCTRL_PWMAFS_MASK);
             reg |= (((uint16_t)faultState << (uint16_t)PWM_OCTRL_PWMAFS_SHIFT) & (uint16_t)PWM_OCTRL_PWMAFS_MASK);
             break;
         case kPWM_PwmB:
-            reg &= ~((uint16_t)PWM_OCTRL_PWMBFS_MASK);
+            reg &= MCUX_MASK_INVERT_16(PWM_OCTRL_PWMBFS_MASK);
             reg |= (((uint16_t)faultState << (uint16_t)PWM_OCTRL_PWMBFS_SHIFT) & (uint16_t)PWM_OCTRL_PWMBFS_MASK);
             break;
         case kPWM_PwmX:
-            reg &= ~((uint16_t)PWM_OCTRL_PWMXFS_MASK);
+            reg &= MCUX_MASK_INVERT_16(PWM_OCTRL_PWMXFS_MASK);
             reg |= (((uint16_t)faultState << (uint16_t)PWM_OCTRL_PWMXFS_SHIFT) & (uint16_t)PWM_OCTRL_PWMXFS_MASK);
             break;
         default:
@@ -1179,15 +1317,15 @@ static inline void PWM_SetupFaultDisableMap(PWM_Type *base,
     switch (pwmChannel)
     {
         case kPWM_PwmA:
-            reg &= ~((uint16_t)PWM_DISMAP_DIS0A_MASK);
+            reg &= MCUX_MASK_INVERT_16(PWM_DISMAP_DIS0A_MASK);
             reg |= (((uint16_t)(value) << (uint16_t)PWM_DISMAP_DIS0A_SHIFT) & (uint16_t)PWM_DISMAP_DIS0A_MASK);
             break;
         case kPWM_PwmB:
-            reg &= ~((uint16_t)PWM_DISMAP_DIS0B_MASK);
+            reg &= MCUX_MASK_INVERT_16(PWM_DISMAP_DIS0B_MASK);
             reg |= (((uint16_t)(value) << (uint16_t)PWM_DISMAP_DIS0B_SHIFT) & (uint16_t)PWM_DISMAP_DIS0B_MASK);
             break;
         case kPWM_PwmX:
-            reg &= ~((uint16_t)PWM_DISMAP_DIS0X_MASK);
+            reg &= MCUX_MASK_INVERT_16(PWM_DISMAP_DIS0X_MASK);
             reg |= (((uint16_t)(value) << (uint16_t)PWM_DISMAP_DIS0X_SHIFT) & (uint16_t)PWM_DISMAP_DIS0X_MASK);
             break;
         default:
@@ -1209,17 +1347,20 @@ static inline void PWM_SetupFaultDisableMap(PWM_Type *base,
  */
 static inline void PWM_OutputEnable(PWM_Type *base, pwm_channels_t pwmChannel, pwm_submodule_t subModule)
 {
+    uint32_t subModuleMsk = 1UL << (uint32_t)subModule;
+    assert(subModuleMsk <= 0x8U);
+
     /* Set PWM output */
     switch (pwmChannel)
     {
         case kPWM_PwmA:
-            base->OUTEN |= ((uint16_t)1U << ((uint16_t)PWM_OUTEN_PWMA_EN_SHIFT + (uint16_t)subModule));
+            base->OUTEN |= ((uint16_t)subModuleMsk << PWM_OUTEN_PWMA_EN_SHIFT);
             break;
         case kPWM_PwmB:
-            base->OUTEN |= ((uint16_t)1U << ((uint16_t)PWM_OUTEN_PWMB_EN_SHIFT + (uint16_t)subModule));
+            base->OUTEN |= ((uint16_t)subModuleMsk << PWM_OUTEN_PWMB_EN_SHIFT);
             break;
         case kPWM_PwmX:
-            base->OUTEN |= ((uint16_t)1U << ((uint16_t)PWM_OUTEN_PWMX_EN_SHIFT + (uint16_t)subModule));
+            base->OUTEN |= ((uint16_t)subModuleMsk << PWM_OUTEN_PWMX_EN_SHIFT);
             break;
         default:
             assert(false);
@@ -1239,16 +1380,19 @@ static inline void PWM_OutputEnable(PWM_Type *base, pwm_channels_t pwmChannel, p
  */
 static inline void PWM_OutputDisable(PWM_Type *base, pwm_channels_t pwmChannel, pwm_submodule_t subModule)
 {
+    uint32_t subModuleMsk = 1UL << (uint32_t)subModule;
+    assert(subModuleMsk <= 0x8U);
+
     switch (pwmChannel)
     {
         case kPWM_PwmA:
-            base->OUTEN &= ~((uint16_t)1U << ((uint16_t)PWM_OUTEN_PWMA_EN_SHIFT + (uint16_t)subModule));
+            base->OUTEN &= MCUX_MASK_INVERT_16((uint16_t)subModuleMsk << PWM_OUTEN_PWMA_EN_SHIFT);
             break;
         case kPWM_PwmB:
-            base->OUTEN &= ~((uint16_t)1U << ((uint16_t)PWM_OUTEN_PWMB_EN_SHIFT + (uint16_t)subModule));
+            base->OUTEN &= MCUX_MASK_INVERT_16((uint16_t)subModuleMsk << PWM_OUTEN_PWMB_EN_SHIFT);
             break;
         case kPWM_PwmX:
-            base->OUTEN &= ~((uint16_t)1U << ((uint16_t)PWM_OUTEN_PWMX_EN_SHIFT + (uint16_t)subModule));
+            base->OUTEN &= MCUX_MASK_INVERT_16((uint16_t)subModuleMsk << PWM_OUTEN_PWMX_EN_SHIFT);
             break;
         default:
             assert(false);
@@ -1350,19 +1494,19 @@ static inline void PWM_SetFilterSampleCount(PWM_Type *base,
     {
 #if defined(FSL_FEATURE_PWM_HAS_CAPTURE_ON_CHANNELA) && FSL_FEATURE_PWM_HAS_CAPTURE_ON_CHANNELA
         case kPWM_PwmA:
-            base->SM[subModule].CAPTFILTA &= ~((uint16_t)PWM_CAPTFILTA_CAPTA_FILT_CNT_MASK);
+            base->SM[subModule].CAPTFILTA &= MCUX_MASK_INVERT_16(PWM_CAPTFILTA_CAPTA_FILT_CNT_MASK);
             base->SM[subModule].CAPTFILTA |= PWM_CAPTFILTA_CAPTA_FILT_CNT(filterSampleCount);
             break;
 #endif /* FSL_FEATURE_PWM_HAS_CAPTURE_ON_CHANNELA */
 #if defined(FSL_FEATURE_PWM_HAS_CAPTURE_ON_CHANNELB) && FSL_FEATURE_PWM_HAS_CAPTURE_ON_CHANNELB
         case kPWM_PwmB:
-            base->SM[subModule].CAPTFILTB &= ~((uint16_t)PWM_CAPTFILTB_CAPTB_FILT_CNT_MASK);
+            base->SM[subModule].CAPTFILTB &= MCUX_MASK_INVERT_16(PWM_CAPTFILTB_CAPTB_FILT_CNT_MASK);
             base->SM[subModule].CAPTFILTB |= PWM_CAPTFILTB_CAPTB_FILT_CNT(filterSampleCount);
             break;
 #endif /* FSL_FEATURE_PWM_HAS_CAPTURE_ON_CHANNELB */
 #if defined(FSL_FEATURE_PWM_HAS_CAPTURE_ON_CHANNELX) && FSL_FEATURE_PWM_HAS_CAPTURE_ON_CHANNELX
         case kPWM_PwmX:
-            base->SM[subModule].CAPTFILTX &= ~((uint16_t)PWM_CAPTFILTX_CAPTX_FILT_CNT_MASK);
+            base->SM[subModule].CAPTFILTX &= MCUX_MASK_INVERT_16(PWM_CAPTFILTX_CAPTX_FILT_CNT_MASK);
             base->SM[subModule].CAPTFILTX |= PWM_CAPTFILTX_CAPTX_FILT_CNT(filterSampleCount);
             break;
 #endif /* FSL_FEATURE_PWM_HAS_CAPTURE_ON_CHANNELX */
@@ -1389,19 +1533,19 @@ static inline void PWM_SetFilterSamplePeriod(PWM_Type *base,
     {
 #if defined(FSL_FEATURE_PWM_HAS_CAPTURE_ON_CHANNELA) && FSL_FEATURE_PWM_HAS_CAPTURE_ON_CHANNELA
         case kPWM_PwmA:
-            base->SM[subModule].CAPTFILTA &= ~((uint16_t)PWM_CAPTFILTA_CAPTA_FILT_PER_MASK);
+            base->SM[subModule].CAPTFILTA &= MCUX_MASK_INVERT_16(PWM_CAPTFILTA_CAPTA_FILT_PER_MASK);
             base->SM[subModule].CAPTFILTA |= PWM_CAPTFILTA_CAPTA_FILT_PER(filterSamplePeriod);
             break;
 #endif /* FSL_FEATURE_PWM_HAS_CAPTURE_ON_CHANNELA */
 #if defined(FSL_FEATURE_PWM_HAS_CAPTURE_ON_CHANNELB) && FSL_FEATURE_PWM_HAS_CAPTURE_ON_CHANNELB
         case kPWM_PwmB:
-            base->SM[subModule].CAPTFILTB &= ~((uint16_t)PWM_CAPTFILTB_CAPTB_FILT_PER_MASK);
+            base->SM[subModule].CAPTFILTB &= MCUX_MASK_INVERT_16(PWM_CAPTFILTB_CAPTB_FILT_PER_MASK);
             base->SM[subModule].CAPTFILTB |= PWM_CAPTFILTB_CAPTB_FILT_PER(filterSamplePeriod);
             break;
 #endif /* FSL_FEATURE_PWM_HAS_CAPTURE_ON_CHANNELB */
 #if defined(FSL_FEATURE_PWM_HAS_CAPTURE_ON_CHANNELX) && FSL_FEATURE_PWM_HAS_CAPTURE_ON_CHANNELX
         case kPWM_PwmX:
-            base->SM[subModule].CAPTFILTX &= ~((uint16_t)PWM_CAPTFILTX_CAPTX_FILT_PER_MASK);
+            base->SM[subModule].CAPTFILTX &= MCUX_MASK_INVERT_16(PWM_CAPTFILTX_CAPTX_FILT_PER_MASK);
             base->SM[subModule].CAPTFILTX |= PWM_CAPTFILTX_CAPTX_FILT_PER(filterSamplePeriod);
             break;
 #endif /* FSL_FEATURE_PWM_HAS_CAPTURE_ON_CHANNELX */

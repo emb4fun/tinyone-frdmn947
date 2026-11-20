@@ -29,11 +29,11 @@ static CACHE64_POLSEL_Type *const s_cache64polselBases[] = CACHE64_POLSEL_BASE_P
 
 #if (defined(CACHE64_CTRL_PHYMEM_BASE_ALIAS_COUNT))
 #define CACHE64_PHYMEM_COLUM_COUNT CACHE64_CTRL_PHYMEM_BASE_ALIAS_COUNT
-/* Array of CACHE64 physical memory base address, 
+/* Array of CACHE64 physical memory base address,
   it is a 2D array, the row indicate cache instance,
   the column indicate the alias of one instance.  */
 static uint32_t const s_cache64PhymemBases[FSL_FEATURE_SOC_CACHE64_CTRL_COUNT][CACHE64_PHYMEM_COLUM_COUNT] = CACHE64_CTRL_PHYMEM_BASES;
-/* Array of CACHE64 physical size base address, 
+/* Array of CACHE64 physical size base address,
   it is a 2D array, the row indicate cache instance,
   the column indicate the alias of one instance.  */
 static uint32_t const s_cache64PhymemSizes[FSL_FEATURE_SOC_CACHE64_CTRL_COUNT][CACHE64_PHYMEM_COLUM_COUNT] = CACHE64_CTRL_PHYMEM_SIZES;
@@ -68,7 +68,7 @@ uint32_t CACHE64_GetInstance(CACHE64_POLSEL_Type *base)
 
     for (i = 0; i < ARRAY_SIZE(s_cache64polselBases); i++)
     {
-        if (MSDK_REG_SECURE_ADDR(base) == MSDK_REG_SECURE_ADDR(s_cache64polselBases[i]))
+        if (MSDK_REG_NONSECURE_ADDR(base) == MSDK_REG_NONSECURE_ADDR(s_cache64polselBases[i]))
         {
             break;
         }
@@ -99,7 +99,7 @@ uint32_t CACHE64_GetInstanceByAddr(uint32_t address)
         g_cache64MemPhyAliasId = 0U;
         while(g_cache64MemPhyAliasId < CACHE64_PHYMEM_COLUM_COUNT)
         {
-            if ((MSDK_REG_SECURE_ADDR(address) >= MSDK_REG_SECURE_ADDR(phyMemBase[i][g_cache64MemPhyAliasId])) && (MSDK_REG_SECURE_ADDR(address) < MSDK_REG_SECURE_ADDR(phyMemBase[i][g_cache64MemPhyAliasId] + phyMemSize[i][g_cache64MemPhyAliasId] - 0x01U)))
+            if ((MSDK_REG_NONSECURE_ADDR(address) >= MSDK_REG_NONSECURE_ADDR(phyMemBase[i][g_cache64MemPhyAliasId])) && ((MSDK_REG_NONSECURE_ADDR(address) - MSDK_REG_NONSECURE_ADDR(phyMemBase[i][g_cache64MemPhyAliasId])) < phyMemSize[i][g_cache64MemPhyAliasId]))
             {
                 return i;
             }
@@ -107,7 +107,7 @@ uint32_t CACHE64_GetInstanceByAddr(uint32_t address)
         }
         i++;
     }
-		
+
     return 0xFFFFFFFFUL;
 }
 
@@ -182,11 +182,17 @@ void CACHE64_EnableCache(CACHE64_CTRL_Type *base)
     /* if CACHE is not enabled */
     if ((base->CCR & CACHE64_CTRL_CCR_ENCACHE_MASK) == 0x00U)
     {
+        __DSB();
+        __ISB();
+
         /* First, invalidate the entire cache. */
         CACHE64_InvalidateCache(base);
 
         /* Now enable the cache. */
         base->CCR |= CACHE64_CTRL_CCR_ENCACHE_MASK;
+
+        __DSB();
+        __ISB();
     }
 }
 
@@ -199,11 +205,17 @@ void CACHE64_DisableCache(CACHE64_CTRL_Type *base)
     /* if CACHE is enabled */
     if ((base->CCR & CACHE64_CTRL_CCR_ENCACHE_MASK) != 0x00U)
     {
+        __DSB();
+        __ISB();
+
         /* First, push any modified contents. */
         CACHE64_CleanCache(base);
 
         /* Now disable the cache. */
         base->CCR &= ~CACHE64_CTRL_CCR_ENCACHE_MASK;
+
+        __DSB();
+        __ISB();
     }
 }
 
@@ -244,10 +256,10 @@ void CACHE64_InvalidateCacheByRange(uint32_t address, uint32_t size_byte)
         {
             return;
         }
-        uint32_t endAddr = MSDK_REG_SECURE_ADDR(address + size_byte - 0x01U);
+        uint32_t endAddr = MSDK_REG_NONSECURE_ADDR(address + size_byte - 0x01U);
         uint32_t pccReg  = 0;
         /* Align address to cache line size. */
-        uint32_t startAddr = MSDK_REG_SECURE_ADDR(address & ~((uint32_t)CACHE64_LINESIZE_BYTE - 1U));
+        uint32_t startAddr = MSDK_REG_NONSECURE_ADDR(address & ~((uint32_t)CACHE64_LINESIZE_BYTE - 1U));
         uint32_t instance  = CACHE64_GetInstanceByAddr(address);
         uint32_t endLim;
         CACHE64_CTRL_Type *base;
@@ -261,7 +273,7 @@ void CACHE64_InvalidateCacheByRange(uint32_t address, uint32_t size_byte)
             return;
         }
         base    = s_cache64ctrlBases[instance];
-        endLim  = MSDK_REG_SECURE_ADDR(phyMemBase[instance][g_cache64MemPhyAliasId] + phyMemSize[instance][g_cache64MemPhyAliasId] - 0x01U);
+        endLim  = MSDK_REG_NONSECURE_ADDR(phyMemBase[instance][g_cache64MemPhyAliasId] + phyMemSize[instance][g_cache64MemPhyAliasId] - 0x01U);
         endAddr = endAddr > endLim ? endLim : endAddr;
 
         /* In some platforms, multiple regions in the memory map are remapped to create
@@ -280,7 +292,7 @@ void CACHE64_InvalidateCacheByRange(uint32_t address, uint32_t size_byte)
         pccReg = (base->CLCR & ~CACHE64_CTRL_CLCR_LCMD_MASK) | CACHE64_CTRL_CLCR_LCMD(1) | CACHE64_CTRL_CLCR_LADSEL_MASK;
         base->CLCR = pccReg;
 
-        while (startAddr < endAddr)
+        while (startAddr <= endAddr)
         {
             /* Set the address and initiate the command. */
             base->CSAR = (startAddr & CACHE64_CTRL_CSAR_PHYADDR_MASK) | CACHE64_CTRL_CSAR_LGO_MASK;
@@ -331,10 +343,10 @@ void CACHE64_CleanCacheByRange(uint32_t address, uint32_t size_byte)
         {
             return;
         }
-        uint32_t endAddr = MSDK_REG_SECURE_ADDR(address + size_byte - 0x01U);
+        uint32_t endAddr = MSDK_REG_NONSECURE_ADDR(address + size_byte - 0x01U);
         uint32_t pccReg  = 0;
         /* Align address to cache line size. */
-        uint32_t startAddr = MSDK_REG_SECURE_ADDR(address & ~((uint32_t)CACHE64_LINESIZE_BYTE - 1U));
+        uint32_t startAddr = MSDK_REG_NONSECURE_ADDR(address & ~((uint32_t)CACHE64_LINESIZE_BYTE - 1U));
         uint32_t instance  = CACHE64_GetInstanceByAddr(address);
         uint32_t endLim;
         CACHE64_CTRL_Type *base;
@@ -348,7 +360,7 @@ void CACHE64_CleanCacheByRange(uint32_t address, uint32_t size_byte)
             return;
         }
         base    = s_cache64ctrlBases[instance];
-        endLim  = MSDK_REG_SECURE_ADDR(phyMemBase[instance][g_cache64MemPhyAliasId] + phyMemSize[instance][g_cache64MemPhyAliasId] - 0x01U);
+        endLim  = MSDK_REG_NONSECURE_ADDR(phyMemBase[instance][g_cache64MemPhyAliasId] + phyMemSize[instance][g_cache64MemPhyAliasId] - 0x01U);
         endAddr = endAddr > endLim ? endLim : endAddr;
 
         /* In some platforms, multiple regions in the memory map are remapped to create
@@ -367,7 +379,7 @@ void CACHE64_CleanCacheByRange(uint32_t address, uint32_t size_byte)
         pccReg = (base->CLCR & ~CACHE64_CTRL_CLCR_LCMD_MASK) | CACHE64_CTRL_CLCR_LCMD(2) | CACHE64_CTRL_CLCR_LADSEL_MASK;
         base->CLCR = pccReg;
 
-        while (startAddr < endAddr)
+        while (startAddr <= endAddr)
         {
             /* Set the address and initiate the command. */
             base->CSAR = (startAddr & CACHE64_CTRL_CSAR_PHYADDR_MASK) | CACHE64_CTRL_CSAR_LGO_MASK;
@@ -420,10 +432,10 @@ void CACHE64_CleanInvalidateCacheByRange(uint32_t address, uint32_t size_byte)
         {
             return;
         }
-        uint32_t endAddr = MSDK_REG_SECURE_ADDR(address + size_byte - 0x01U);
+        uint32_t endAddr = MSDK_REG_NONSECURE_ADDR(address + size_byte - 0x01U);
         uint32_t pccReg  = 0;
         /* Align address to cache line size. */
-        uint32_t startAddr = MSDK_REG_SECURE_ADDR(address & ~((uint32_t)CACHE64_LINESIZE_BYTE - 1U));
+        uint32_t startAddr = MSDK_REG_NONSECURE_ADDR(address & ~((uint32_t)CACHE64_LINESIZE_BYTE - 1U));
         uint32_t instance  = CACHE64_GetInstanceByAddr(address);
         uint32_t endLim;
         CACHE64_CTRL_Type *base;
@@ -437,7 +449,7 @@ void CACHE64_CleanInvalidateCacheByRange(uint32_t address, uint32_t size_byte)
             return;
         }
         base    = s_cache64ctrlBases[instance];
-        endLim  = MSDK_REG_SECURE_ADDR(phyMemBase[instance][g_cache64MemPhyAliasId] + phyMemSize[instance][g_cache64MemPhyAliasId] - 0x01U);
+        endLim  = MSDK_REG_NONSECURE_ADDR(phyMemBase[instance][g_cache64MemPhyAliasId] + phyMemSize[instance][g_cache64MemPhyAliasId] - 0x01U);
         endAddr = endAddr > endLim ? endLim : endAddr;
 
         /* In some platforms, multiple regions in the memory map are remapped to create
@@ -456,7 +468,7 @@ void CACHE64_CleanInvalidateCacheByRange(uint32_t address, uint32_t size_byte)
         pccReg = (base->CLCR & ~CACHE64_CTRL_CLCR_LCMD_MASK) | CACHE64_CTRL_CLCR_LCMD(3) | CACHE64_CTRL_CLCR_LADSEL_MASK;
         base->CLCR = pccReg;
 
-        while (startAddr < endAddr)
+        while (startAddr <= endAddr)
         {
             /* Set the address and initiate the command. */
             base->CSAR = (startAddr & CACHE64_CTRL_CSAR_PHYADDR_MASK) | CACHE64_CTRL_CSAR_LGO_MASK;

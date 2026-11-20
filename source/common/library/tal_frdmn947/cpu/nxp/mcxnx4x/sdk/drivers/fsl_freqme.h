@@ -1,5 +1,5 @@
 /*
- * Copyright 2021-2022 NXP
+ * Copyright 2021-2022, 2025-2026 NXP
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -20,8 +20,8 @@
 
 /*! @name Driver version */
 /*! @{ */
-/*! @brief FREQME driver version 2.1.2. */
-#define FSL_FREQME_DRIVER_VERSION (MAKE_VERSION(2, 1, 2))
+/*! @brief FREQME driver version 2.2.0. */
+#define FSL_FREQME_DRIVER_VERSION (MAKE_VERSION(2, 2, 0))
 /*! @} */
 
 /*!
@@ -32,7 +32,7 @@ enum _freqme_interrupt_status_flags
 {
     kFREQME_UnderflowInterruptStatusFlag = FREQME_CTRLSTAT_LT_MIN_STAT_MASK,   /*!< Indicate the measurement is
                                                                                      just done and the result is less
-                                                                                     than minimun value. */
+                                                                                     than minimum value. */
     kFREQME_OverflowInterruptStatusFlag = FREQME_CTRLSTAT_GT_MAX_STAT_MASK,    /*!< Indicate the measurement is
                                                                                      just done and the result is greater
                                                                                      than maximum value. */
@@ -67,6 +67,15 @@ enum _freqme_interrupt_enable
 typedef enum _freqme_operate_mode
 {
     kFREQME_FreqMeasurementMode = 0U,  /*!< The module works in the frequency measurement mode. */
+    /*
+     * In pulse width measurement mode, FREQME uses the known high or low period of the reference clock as
+     * a measurement window.
+     * During this window, it counts the number of pulses from the target clock. By combining the known
+     * duration of the reference clock's high or low period with the counted target pulses, the target
+     * clock frequency can be calculated.
+     * If the reference clock has a high period of 1 ms and 1000 target pulses occur during that time,
+     * the target frequency is 1 MHz.
+     */
     kFREOME_PulseWidthMeasurementMode, /*!< The module works in the pulse width measurement mode. */
 } freqme_operate_mode_t;
 
@@ -268,6 +277,30 @@ static inline void FREQME_SetMaxExpectedValue(FREQME_Type *base, uint32_t maxVal
     base->MAX = maxValue;
 }
 
+#if (defined(FSL_FEATURE_FREQME_HAS_CLOCK_SOURCE_SELECT) && FSL_FEATURE_FREQME_HAS_CLOCK_SOURCE_SELECT)
+/*!
+ * @brief Set the reference clock source.
+ *
+ * @param base FREQME peripheral base address.
+ * @param referenceClk The reference clock source, see freqme_reference_clock_t in <device>_COMMON.h.
+ */
+static inline void FREQME_SetReferenceClk(FREQME_Type *base, uint32_t referenceClk)
+{
+    base->REF = FREQME_REF_INP(referenceClk);
+}
+
+/*!
+ * @brief Set the target clock source.
+ *
+ * @param base FREQME peripheral base address.
+ * @param targetClk The target clock source, see freqme_target_clock_t in <device>_COMMON.h.
+ */
+static inline void FREQME_SetTargetClk(FREQME_Type *base, uint32_t targetClk)
+{
+    base->TAR = FREQME_TAR_INP(targetClk);
+}
+#endif
+
 /*! @} */
 
 /*!
@@ -276,16 +309,16 @@ static inline void FREQME_SetMaxExpectedValue(FREQME_Type *base, uint32_t maxVal
  */
 
 /*!
- * @brief Calculate the frequency of selected target clock。
+ * @brief Calculate the frequency of selected target clock.
  *
- * @note The formula: Ftarget = (RESULT - 2) * Freference / 2 ^ REF_SCALE.
+ * @note The formula: Ftarget = (RESULT - 2) * Freference / 2 ^ REF_SCALE or
+ *       Ftarget = (RESULT + 1) * Freference / 2 ^ REF_SCALE
  *
  * @note This function only useful when the operate mode is selected as frequency measurement mode.
  *
  * @param base FREQME peripheral base address.
  * @param refClkFrequency The frequency of reference clock.
- * @return The frequency of target clock the unit is Hz, if the output result is 0, please check the module's
- *         operate mode.
+ * @return The frequency of target clock, if the output result is 0, please check the module's operate mode.
  */
 uint32_t FREQME_CalculateTargetClkFreq(FREQME_Type *base, uint32_t refClkFrequency);
 
@@ -342,11 +375,8 @@ static inline bool FREQME_CheckPulsePolarity(FREQME_Type *base)
 }
 
 /*!
- * @brief Get measurement result, if operate mode is selected as pulse width measurement mode this function can
- * be used to calculate pulse width.
- *
- * @note Pulse width = counter result / Frequency of target clock.
- *
+ * @brief Get measurement result.
+ * 
  * @param base FREQME peripheral base address.
  * @return Measurement result.
  */

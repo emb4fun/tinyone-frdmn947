@@ -33,6 +33,11 @@ static void LPUART_RTOS_Callback(LPUART_Type *base, lpuart_handle_t *state, stat
     lpuart_rtos_handle_t *handle = (lpuart_rtos_handle_t *)param;
     BaseType_t xHigherPriorityTaskWoken, xResult;
 
+    if (handle == NULL)
+    {
+        return;
+    }
+
     xHigherPriorityTaskWoken = pdFALSE;
     xResult                  = pdFAIL;
 
@@ -88,27 +93,27 @@ int LPUART_RTOS_Init(lpuart_rtos_handle_t *handle, lpuart_handle_t *t_handle, co
 
     if (NULL == handle)
     {
-        return kStatus_InvalidArgument;
+        return (int)kStatus_InvalidArgument;
     }
     if (NULL == t_handle)
     {
-        return kStatus_InvalidArgument;
+        return (int)kStatus_InvalidArgument;
     }
     if (NULL == cfg)
     {
-        return kStatus_InvalidArgument;
+        return (int)kStatus_InvalidArgument;
     }
     if (NULL == cfg->base)
     {
-        return kStatus_InvalidArgument;
+        return (int)kStatus_InvalidArgument;
     }
     if (0u == cfg->srcclk)
     {
-        return kStatus_InvalidArgument;
+        return (int)kStatus_InvalidArgument;
     }
     if (0u == cfg->baudrate)
     {
-        return kStatus_InvalidArgument;
+        return (int)kStatus_InvalidArgument;
     }
 
     handle->base                     = cfg->base;
@@ -125,7 +130,7 @@ int LPUART_RTOS_Init(lpuart_rtos_handle_t *handle, lpuart_handle_t *t_handle, co
 #endif
     if (NULL == handle->txSemaphore)
     {
-        return kStatus_Fail;
+        return (int)kStatus_Fail;
     }
 #if (configSUPPORT_STATIC_ALLOCATION == 1)
     handle->rxSemaphore = xSemaphoreCreateMutexStatic(&handle->rxSemaphoreBuffer);
@@ -135,7 +140,7 @@ int LPUART_RTOS_Init(lpuart_rtos_handle_t *handle, lpuart_handle_t *t_handle, co
     if (NULL == handle->rxSemaphore)
     {
         vSemaphoreDelete(handle->txSemaphore);
-        return kStatus_Fail;
+        return (int)kStatus_Fail;
     }
 #if (configSUPPORT_STATIC_ALLOCATION == 1)
     handle->txEvent = xEventGroupCreateStatic(&handle->txEventBuffer);
@@ -146,7 +151,7 @@ int LPUART_RTOS_Init(lpuart_rtos_handle_t *handle, lpuart_handle_t *t_handle, co
     {
         vSemaphoreDelete(handle->rxSemaphore);
         vSemaphoreDelete(handle->txSemaphore);
-        return kStatus_Fail;
+        return (int)kStatus_Fail;
     }
 #if (configSUPPORT_STATIC_ALLOCATION == 1)
     handle->rxEvent = xEventGroupCreateStatic(&handle->rxEventBuffer);
@@ -158,7 +163,7 @@ int LPUART_RTOS_Init(lpuart_rtos_handle_t *handle, lpuart_handle_t *t_handle, co
         vEventGroupDelete(handle->txEvent);
         vSemaphoreDelete(handle->rxSemaphore);
         vSemaphoreDelete(handle->txSemaphore);
-        return kStatus_Fail;
+        return (int)kStatus_Fail;
     }
 
     LPUART_GetDefaultConfig(&defcfg);
@@ -179,7 +184,7 @@ int LPUART_RTOS_Init(lpuart_rtos_handle_t *handle, lpuart_handle_t *t_handle, co
         vEventGroupDelete(handle->txEvent);
         vSemaphoreDelete(handle->rxSemaphore);
         vSemaphoreDelete(handle->txSemaphore);
-        return kStatus_Fail;
+        return (int)kStatus_Fail;
     }
     LPUART_TransferCreateHandle(handle->base, handle->t_state, LPUART_RTOS_Callback, handle);
     LPUART_TransferStartRingBuffer(handle->base, handle->t_state, cfg->buffer, cfg->buffer_size);
@@ -187,7 +192,7 @@ int LPUART_RTOS_Init(lpuart_rtos_handle_t *handle, lpuart_handle_t *t_handle, co
     LPUART_EnableTx(handle->base, true);
     LPUART_EnableRx(handle->base, true);
 
-    return kStatus_Success;
+    return (int)kStatus_Success;
 }
 
 /*FUNCTION**********************************************************************
@@ -247,26 +252,27 @@ int LPUART_RTOS_Send(lpuart_rtos_handle_t *handle, uint8_t *buffer, uint32_t len
     int retval = kStatus_Fail;
     status_t status;
     const TickType_t txTickTimeout =
-        (length * handle->tx_timeout_multiplier_ms + handle->tx_timeout_constant_ms) / portTICK_PERIOD_MS;
+        (TickType_t)(((uint64_t)length * handle->tx_timeout_multiplier_ms + handle->tx_timeout_constant_ms) /
+                     portTICK_PERIOD_MS);
 
     if (NULL == handle->base)
     {
         /* Invalid handle. */
-        return kStatus_Fail;
+        return (int)kStatus_Fail;
     }
     if (0u == length)
     {
-        return kStatus_Success;
+        return (int)kStatus_Success;
     }
     if (NULL == buffer)
     {
-        return kStatus_InvalidArgument;
+        return (int)kStatus_InvalidArgument;
     }
 
     if (pdFALSE == xSemaphoreTake(handle->txSemaphore, 0u))
     {
         /* We could not take the semaphore, exit with 0 data received */
-        return kStatus_Fail;
+        return (int)kStatus_Fail;
     }
 
     handle->txTransfer.data     = (uint8_t *)buffer;
@@ -277,7 +283,7 @@ int LPUART_RTOS_Send(lpuart_rtos_handle_t *handle, uint8_t *buffer, uint32_t len
     if (status != kStatus_Success)
     {
         (void)xSemaphoreGive(handle->txSemaphore);
-        return kStatus_Fail;
+        return (int)kStatus_Fail;
     }
 
     ev = xEventGroupWaitBits(handle->txEvent, RTOS_LPUART_TX_COMPLETE, pdTRUE, pdFALSE,
@@ -334,12 +340,13 @@ int LPUART_RTOS_Receive(lpuart_rtos_handle_t *handle, uint8_t *buffer, uint32_t 
     uint32_t local_received = 0u;
     status_t status;
     const TickType_t rxTickTimeout =
-        (length * handle->rx_timeout_multiplier_ms + handle->rx_timeout_constant_ms) / portTICK_PERIOD_MS;
+        (TickType_t)(((uint64_t)length * handle->rx_timeout_multiplier_ms + handle->rx_timeout_constant_ms) /
+                     portTICK_PERIOD_MS);
 
     if (NULL == handle->base)
     {
         /* Invalid handle. */
-        return kStatus_Fail;
+        return (int)kStatus_Fail;
     }
     if (0u == length)
     {
@@ -347,18 +354,18 @@ int LPUART_RTOS_Receive(lpuart_rtos_handle_t *handle, uint8_t *buffer, uint32_t 
         {
             *received = n;
         }
-        return kStatus_Success;
+        return (int)kStatus_Success;
     }
     if (NULL == buffer)
     {
-        return kStatus_InvalidArgument;
+        return (int)kStatus_InvalidArgument;
     }
 
     /* New transfer can be performed only after current one is finished */
     if (pdFALSE == xSemaphoreTake(handle->rxSemaphore, portMAX_DELAY))
     {
         /* We could not take the semaphore, exit with 0 data received */
-        return kStatus_Fail;
+        return (int)kStatus_Fail;
     }
 
     handle->rxTransfer.data     = buffer;
@@ -369,7 +376,7 @@ int LPUART_RTOS_Receive(lpuart_rtos_handle_t *handle, uint8_t *buffer, uint32_t 
     if (status != kStatus_Success)
     {
         (void)xSemaphoreGive(handle->rxSemaphore);
-        return kStatus_Fail;
+        return (int)kStatus_Fail;
     }
 
     ev = xEventGroupWaitBits(
@@ -453,11 +460,11 @@ int LPUART_RTOS_SetRxTimeout(lpuart_rtos_handle_t *handle,
 {
     if (NULL == handle)
     {
-        return kStatus_InvalidArgument;
+        return (int)kStatus_InvalidArgument;
     }
     handle->rx_timeout_constant_ms   = rx_timeout_constant_ms;
     handle->rx_timeout_multiplier_ms = rx_timeout_multiplier_ms;
-    return kStatus_Success;
+    return (int)kStatus_Success;
 }
 
 /*FUNCTION**********************************************************************
@@ -481,9 +488,9 @@ int LPUART_RTOS_SetTxTimeout(lpuart_rtos_handle_t *handle,
 {
     if (NULL == handle)
     {
-        return kStatus_InvalidArgument;
+        return (int)kStatus_InvalidArgument;
     }
     handle->tx_timeout_constant_ms   = tx_timeout_constant_ms;
     handle->tx_timeout_multiplier_ms = tx_timeout_multiplier_ms;
-    return kStatus_Success;
+    return (int)kStatus_Success;
 }

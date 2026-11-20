@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015-2016, Freescale Semiconductor, Inc.
- * Copyright 2016-2021, 2025 NXP
+ * Copyright 2016-2021, 2025-2026 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -129,6 +129,7 @@ static status_t FLEXIO_UART_CalculateBaudRate(uint32_t baudRate_Bps, uint32_t sr
 
     for (i=0; i<ARRAY_SIZE(timerSourceDividers); i++)
     {
+        assert(baudRate_Bps <= (UINT32_MAX / timerSourceDividers[i]));
         timerDiv = srcClock_Hz / (baudRate_Bps * timerSourceDividers[i]);
         timerDiv = timerDiv / 2U - 1U;
 
@@ -230,7 +231,7 @@ status_t FLEXIO_UART_Init(FLEXIO_UART_Type *base, const flexio_uart_config_t *us
     ctrlReg |= (FLEXIO_CTRL_DBGE(userConfig->enableInDebug ? 1U : 0U) | FLEXIO_CTRL_FASTACC(userConfig->enableFastAccess ? 1U : 0U) |
                 FLEXIO_CTRL_FLEXEN(userConfig->enableUart ? 1U : 0U));
 #if !(defined(FSL_FEATURE_FLEXIO_HAS_DOZE_MODE_SUPPORT) && (FSL_FEATURE_FLEXIO_HAS_DOZE_MODE_SUPPORT == 0))
-    if (!userConfig->enableInDoze ? 1U : 0U)
+    if (!userConfig->enableInDoze)
     {
         ctrlReg |= FLEXIO_CTRL_DOZEN_MASK;
     }
@@ -621,7 +622,7 @@ void FLEXIO_UART_TransferStartRingBuffer(FLEXIO_UART_Type *base,
     /* Setup the ringbuffer address */
     if (ringBuffer != NULL)
     {
-        assert((ringBufferSize > 1U) && (ringBufferSize <= UINT16_MAX));
+        assert((ringBufferSize > 1U) && (ringBufferSize <= (size_t)UINT16_MAX));
 
         handle->rxRingBuffer     = ringBuffer;
         handle->rxRingBufferSize = ringBufferSize;

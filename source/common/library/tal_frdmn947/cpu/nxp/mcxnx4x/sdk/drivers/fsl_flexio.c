@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2015, Freescale Semiconductor, Inc.
- * Copyright 2016-2020, 2024-2025 NXP
+ * Copyright 2016-2020, 2024-2026 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -46,6 +46,18 @@ static void *s_flexioType[FLEXIO_HANDLE_COUNT];
 /*< @brief pointer to array of FLEXIO Isr. */
 static flexio_isr_t s_flexioIsr[FLEXIO_HANDLE_COUNT];
 
+/*!
+ * @brief Common initial layout for FlexIO simulated peripheral types.
+ *
+ * @note This assumes all FlexIO simulated peripheral base types registered by
+ * FLEXIO_RegisterHandleIRQ() have FLEXIO_Type * as their first structure
+ * member.
+ */
+typedef struct _flexio_simulated_type
+{
+    FLEXIO_Type *flexioBase; /*!< FlexIO base pointer. */
+} flexio_simulated_type_t;
+
 /* FlexIO common IRQ Handler. */
 static void FLEXIO_CommonIRQHandler(void);
 
@@ -68,9 +80,18 @@ uint32_t FLEXIO_GetInstance(FLEXIO_Type *base)
     uint32_t instance;
 
     /* Find the instance index from base address mappings. */
-    for (instance = 0; instance < ARRAY_SIZE(s_flexioBases); instance++)
+    /*
+     * $Branch Coverage Justification$
+     * (instance >= ARRAY_SIZE(s_flexioBases)) not covered. The peripheral base
+     * address is always valid and checked by assert.
+     */
+    for (instance = 0; instance < ARRAY_SIZE(s_flexioBases); instance++) /* GCOVR_EXCL_BR_LINE */
     {
-        if (MSDK_REG_SECURE_ADDR(s_flexioBases[instance]) == MSDK_REG_SECURE_ADDR(base))
+        /*
+         * $Branch Coverage Justification$
+         * false branch not covered - depends on count of peripheral instances
+         */
+        if (MSDK_REG_NONSECURE_ADDR(s_flexioBases[instance]) == MSDK_REG_NONSECURE_ADDR(base)) /* GCOVR_EXCL_BR_LINE */
         {
             break;
         }
@@ -102,13 +123,17 @@ uint32_t FLEXIO_GetInstance(FLEXIO_Type *base)
 void FLEXIO_Init(FLEXIO_Type *base, const flexio_config_t *userConfig)
 {
     uint32_t ctrlReg = 0;
+#if (!(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL)) \
+    || defined(FLEXIO_RESETS_ARRAY)
+    uint32_t instance = FLEXIO_GetInstance(base);
+#endif
 
 #if !(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL)
-    CLOCK_EnableClock(s_flexioClocks[FLEXIO_GetInstance(base)]);
+    CLOCK_EnableClock(s_flexioClocks[instance]);
 #endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
 
 #if defined(FLEXIO_RESETS_ARRAY)
-    RESET_ReleasePeripheralReset(s_flexioResets[FLEXIO_GetInstance(base)]);
+    RESET_ReleasePeripheralReset(s_flexioResets[instance]);
 #endif
 
     FLEXIO_Reset(base);
@@ -122,7 +147,7 @@ void FLEXIO_Init(FLEXIO_Type *base, const flexio_config_t *userConfig)
     ctrlReg |= (FLEXIO_CTRL_DBGE(userConfig->enableInDebug ? 1U : 0U) | FLEXIO_CTRL_FASTACC(userConfig->enableFastAccess ? 1U : 0U) |
                 FLEXIO_CTRL_FLEXEN(userConfig->enableFlexio ? 1U : 0U));
 #if !(defined(FSL_FEATURE_FLEXIO_HAS_DOZE_MODE_SUPPORT) && (FSL_FEATURE_FLEXIO_HAS_DOZE_MODE_SUPPORT == 0))
-    if (!userConfig->enableInDoze ? 1U : 0U)
+    if (!userConfig->enableInDoze)
     {
         ctrlReg |= FLEXIO_CTRL_DOZEN_MASK;
     }
@@ -486,11 +511,23 @@ void FLEXIO_SetPinConfig(FLEXIO_Type *base, uint32_t pin, flexio_gpio_config_t *
 }
 #endif /*FSL_FEATURE_FLEXIO_HAS_PIN_REGISTER*/
 
+/*
+ * $Function Coverage Justification$
+ * Code coverage of FLEXIO_DriverIRQHandler is device specific.
+ */
 void FLEXIO_DriverIRQHandler(void);
-void FLEXIO_DriverIRQHandler(void)
+void FLEXIO_DriverIRQHandler(void) /* GCOVR_EXCL_FUNCTION */
 {
     FLEXIO_CommonIRQHandler();
 }
+
+/*
+ * $Function Coverage Justification$
+ * The individual FLEXIO IRQ handler functions are instance-specific and depend on
+ * the hardware configuration and application usage.
+ * Only the IRQ handlers for the FLEXIO instances actually used in the application will be invoked,
+ * therefore not all handlers need to be covered.
+ */
 
 void FLEXIO0_DriverIRQHandler(void);
 void FLEXIO0_DriverIRQHandler(void)
@@ -499,25 +536,45 @@ void FLEXIO0_DriverIRQHandler(void)
 }
 
 void FLEXIO1_DriverIRQHandler(void);
-void FLEXIO1_DriverIRQHandler(void)
+void FLEXIO1_DriverIRQHandler(void) /* GCOVR_EXCL_FUNCTION */
 {
     FLEXIO_CommonIRQHandler();
 }
 
 void UART2_FLEXIO_DriverIRQHandler(void);
-void UART2_FLEXIO_DriverIRQHandler(void)
+void UART2_FLEXIO_DriverIRQHandler(void) /* GCOVR_EXCL_FUNCTION */
 {
     FLEXIO_CommonIRQHandler();
 }
 
 void FLEXIO2_DriverIRQHandler(void);
-void FLEXIO2_DriverIRQHandler(void)
+void FLEXIO2_DriverIRQHandler(void) /* GCOVR_EXCL_FUNCTION */
 {
     FLEXIO_CommonIRQHandler();
 }
 
 void FLEXIO3_DriverIRQHandler(void);
-void FLEXIO3_DriverIRQHandler(void)
+void FLEXIO3_DriverIRQHandler(void) /* GCOVR_EXCL_FUNCTION */
 {
     FLEXIO_CommonIRQHandler();
+}
+
+void FLEXIO_CommonDriverIRQHandler(uint32_t instance);
+void FLEXIO_CommonDriverIRQHandler(uint32_t instance)  /* GCOVR_EXCL_FUNCTION */
+{
+    uint32_t index;
+
+    if (instance < ARRAY_SIZE(s_flexioBases))
+    {
+        for (index = 0U; index < (uint8_t)FLEXIO_HANDLE_COUNT; index++)
+        {
+            if ((s_flexioHandle[index] != NULL) &&
+                (MSDK_REG_NONSECURE_ADDR(((flexio_simulated_type_t *)s_flexioType[index])->flexioBase) ==
+                 MSDK_REG_NONSECURE_ADDR(s_flexioBases[instance])))
+            {
+                s_flexioIsr[index](s_flexioType[index], s_flexioHandle[index]);
+            }
+        }
+    }
+    SDK_ISR_EXIT_BARRIER;
 }

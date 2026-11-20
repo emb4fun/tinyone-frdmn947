@@ -33,8 +33,6 @@ status_t ELS_PowerDownWakeupInit(S50_Type *base)
 {
     status_t status = kStatus_Fail;
 
-    (void)base;
-
     /* Enable GDET and DTRNG clocks */
     SYSCON->REF_CLK_CTRL_SET =
         SYSCON_REF_CLK_CTRL_SET_GDET_REFCLK_EN_SET_MASK | SYSCON_REF_CLK_CTRL_SET_TRNG_REFCLK_EN_SET_MASK;

@@ -1,6 +1,78 @@
 /*
 ** ###################################################################
-**     Processors:          MCXN546VDF_cm33_core0
+**     Processors:          MCXN246TVAB
+**                          MCXN246VAB
+**                          MCXN247TVAB
+**                          MCXN247TVDF
+**                          MCXN247TVKL
+**                          MCXN247TVPB
+**                          MCXN247VAB
+**                          MCXN247VDF
+**                          MCXN247VKL
+**                          MCXN247VPB
+**                          MCXN526TVDF_cm33_core0
+**                          MCXN526TVDF_cm33_core1
+**                          MCXN526TVKL_cm33_core0
+**                          MCXN526TVKL_cm33_core1
+**                          MCXN526VDF_cm33_core0
+**                          MCXN526VDF_cm33_core1
+**                          MCXN526VKL_cm33_core0
+**                          MCXN526VKL_cm33_core1
+**                          MCXN527TVAB_cm33_core0
+**                          MCXN527TVAB_cm33_core1
+**                          MCXN527TVDF_cm33_core0
+**                          MCXN527TVDF_cm33_core1
+**                          MCXN527TVKL_cm33_core0
+**                          MCXN527TVKL_cm33_core1
+**                          MCXN527VAB_cm33_core0
+**                          MCXN527VAB_cm33_core1
+**                          MCXN527VDF_cm33_core0
+**                          MCXN527VDF_cm33_core1
+**                          MCXN527VKL_cm33_core0
+**                          MCXN527VKL_cm33_core1
+**                          MCXN536TVAB_cm33_core0
+**                          MCXN536TVAB_cm33_core1
+**                          MCXN536TVDF_cm33_core0
+**                          MCXN536TVDF_cm33_core1
+**                          MCXN536TVKL_cm33_core0
+**                          MCXN536TVKL_cm33_core1
+**                          MCXN536TVPB_cm33_core0
+**                          MCXN536TVPB_cm33_core1
+**                          MCXN536VAB_cm33_core0
+**                          MCXN536VAB_cm33_core1
+**                          MCXN536VDF_cm33_core0
+**                          MCXN536VDF_cm33_core1
+**                          MCXN536VKL_cm33_core0
+**                          MCXN536VKL_cm33_core1
+**                          MCXN536VPB_cm33_core0
+**                          MCXN536VPB_cm33_core1
+**                          MCXN537TVAB_cm33_core0
+**                          MCXN537TVAB_cm33_core1
+**                          MCXN537TVDF_cm33_core0
+**                          MCXN537TVDF_cm33_core1
+**                          MCXN537TVKL_cm33_core0
+**                          MCXN537TVKL_cm33_core1
+**                          MCXN537TVPB_cm33_core0
+**                          MCXN537TVPB_cm33_core1
+**                          MCXN537VAB_cm33_core0
+**                          MCXN537VAB_cm33_core1
+**                          MCXN537VDF_cm33_core0
+**                          MCXN537VDF_cm33_core1
+**                          MCXN537VKL_cm33_core0
+**                          MCXN537VKL_cm33_core1
+**                          MCXN537VPB_cm33_core0
+**                          MCXN537VPB_cm33_core1
+**                          MCXN546TVAB_cm33_core0
+**                          MCXN546TVAB_cm33_core1
+**                          MCXN546TVDF_cm33_core0
+**                          MCXN546TVDF_cm33_core1
+**                          MCXN546TVKL_cm33_core0
+**                          MCXN546TVKL_cm33_core1
+**                          MCXN546TVPB_cm33_core0
+**                          MCXN546TVPB_cm33_core1
+**                          MCXN546VAB_cm33_core0
+**                          MCXN546VAB_cm33_core1
+**                          MCXN546VDF_cm33_core0
 **                          MCXN546VDF_cm33_core1
 **                          MCXN546VKL_cm33_core0
 **                          MCXN546VKL_cm33_core1
@@ -8,6 +80,16 @@
 **                          MCXN546VNL_cm33_core1
 **                          MCXN546VPB_cm33_core0
 **                          MCXN546VPB_cm33_core1
+**                          MCXN547TVAB_cm33_core0
+**                          MCXN547TVAB_cm33_core1
+**                          MCXN547TVDF_cm33_core0
+**                          MCXN547TVDF_cm33_core1
+**                          MCXN547TVKL_cm33_core0
+**                          MCXN547TVKL_cm33_core1
+**                          MCXN547TVPB_cm33_core0
+**                          MCXN547TVPB_cm33_core1
+**                          MCXN547VAB_cm33_core0
+**                          MCXN547VAB_cm33_core1
 **                          MCXN547VDF_cm33_core0
 **                          MCXN547VDF_cm33_core1
 **                          MCXN547VKL_cm33_core0
@@ -16,6 +98,36 @@
 **                          MCXN547VNL_cm33_core1
 **                          MCXN547VPB_cm33_core0
 **                          MCXN547VPB_cm33_core1
+**                          MCXN556SCDF_cm33_core0
+**                          MCXN556SCDF_cm33_core1
+**                          MCXN556TCAB_cm33_core0
+**                          MCXN556TCAB_cm33_core1
+**                          MCXN556TCDF_cm33_core0
+**                          MCXN556TCDF_cm33_core1
+**                          MCXN556TVAB_cm33_core0
+**                          MCXN556TVAB_cm33_core1
+**                          MCXN556TVDF_cm33_core0
+**                          MCXN556TVDF_cm33_core1
+**                          MCXN557SCDF_cm33_core0
+**                          MCXN557SCDF_cm33_core1
+**                          MCXN557TCAB_cm33_core0
+**                          MCXN557TCAB_cm33_core1
+**                          MCXN557TCDF_cm33_core0
+**                          MCXN557TCDF_cm33_core1
+**                          MCXN557TVAB_cm33_core0
+**                          MCXN557TVAB_cm33_core1
+**                          MCXN557TVDF_cm33_core0
+**                          MCXN557TVDF_cm33_core1
+**                          MCXN946TVAB_cm33_core0
+**                          MCXN946TVAB_cm33_core1
+**                          MCXN946TVDF_cm33_core0
+**                          MCXN946TVDF_cm33_core1
+**                          MCXN946TVKL_cm33_core0
+**                          MCXN946TVKL_cm33_core1
+**                          MCXN946TVPB_cm33_core0
+**                          MCXN946TVPB_cm33_core1
+**                          MCXN946VAB_cm33_core0
+**                          MCXN946VAB_cm33_core1
 **                          MCXN946VDF_cm33_core0
 **                          MCXN946VDF_cm33_core1
 **                          MCXN946VKL_cm33_core0
@@ -24,6 +136,16 @@
 **                          MCXN946VNL_cm33_core1
 **                          MCXN946VPB_cm33_core0
 **                          MCXN946VPB_cm33_core1
+**                          MCXN947TVAB_cm33_core0
+**                          MCXN947TVAB_cm33_core1
+**                          MCXN947TVDF_cm33_core0
+**                          MCXN947TVDF_cm33_core1
+**                          MCXN947TVKL_cm33_core0
+**                          MCXN947TVKL_cm33_core1
+**                          MCXN947TVPB_cm33_core0
+**                          MCXN947TVPB_cm33_core1
+**                          MCXN947VAB_cm33_core0
+**                          MCXN947VAB_cm33_core1
 **                          MCXN947VDF_cm33_core0
 **                          MCXN947VDF_cm33_core1
 **                          MCXN947VKL_cm33_core0
@@ -34,13 +156,13 @@
 **                          MCXN947VPB_cm33_core1
 **
 **     Version:             rev. 3.0, 2024-10-29
-**     Build:               b250521
+**     Build:               b260812
 **
 **     Abstract:
 **         CMSIS Peripheral Access Layer for DMA
 **
 **     Copyright 1997-2016 Freescale Semiconductor, Inc.
-**     Copyright 2016-2025 NXP
+**     Copyright 2016-2026 NXP
 **     SPDX-License-Identifier: BSD-3-Clause
 **
 **     http:                 www.nxp.com
@@ -70,21 +192,93 @@
 #if !defined(PERI_DMA_H_)
 #define PERI_DMA_H_                              /**< Symbol preventing repeated inclusion */
 
-#if (defined(CPU_MCXN546VDF_cm33_core0) || defined(CPU_MCXN546VKL_cm33_core0) || defined(CPU_MCXN546VNL_cm33_core0) || defined(CPU_MCXN546VPB_cm33_core0))
+#if (defined(CPU_MCXN246VAB))
+#include "MCXN246_COMMON.h"
+#elif (defined(CPU_MCXN246TVAB))
+#include "MCXN246T_COMMON.h"
+#elif (defined(CPU_MCXN247VAB) || defined(CPU_MCXN247VDF) || defined(CPU_MCXN247VKL) || defined(CPU_MCXN247VPB))
+#include "MCXN247_COMMON.h"
+#elif (defined(CPU_MCXN247TVAB) || defined(CPU_MCXN247TVDF) || defined(CPU_MCXN247TVKL) || defined(CPU_MCXN247TVPB))
+#include "MCXN247T_COMMON.h"
+#elif (defined(CPU_MCXN526TVDF_cm33_core0) || defined(CPU_MCXN526TVKL_cm33_core0))
+#include "MCXN526T_cm33_core0_COMMON.h"
+#elif (defined(CPU_MCXN526TVDF_cm33_core1) || defined(CPU_MCXN526TVKL_cm33_core1))
+#include "MCXN526T_cm33_core1_COMMON.h"
+#elif (defined(CPU_MCXN526VDF_cm33_core0) || defined(CPU_MCXN526VKL_cm33_core0))
+#include "MCXN526_cm33_core0_COMMON.h"
+#elif (defined(CPU_MCXN526VDF_cm33_core1) || defined(CPU_MCXN526VKL_cm33_core1))
+#include "MCXN526_cm33_core1_COMMON.h"
+#elif (defined(CPU_MCXN527TVAB_cm33_core0) || defined(CPU_MCXN527TVDF_cm33_core0) || defined(CPU_MCXN527TVKL_cm33_core0))
+#include "MCXN527T_cm33_core0_COMMON.h"
+#elif (defined(CPU_MCXN527TVAB_cm33_core1) || defined(CPU_MCXN527TVDF_cm33_core1) || defined(CPU_MCXN527TVKL_cm33_core1))
+#include "MCXN527T_cm33_core1_COMMON.h"
+#elif (defined(CPU_MCXN527VAB_cm33_core0) || defined(CPU_MCXN527VDF_cm33_core0) || defined(CPU_MCXN527VKL_cm33_core0))
+#include "MCXN527_cm33_core0_COMMON.h"
+#elif (defined(CPU_MCXN527VAB_cm33_core1) || defined(CPU_MCXN527VDF_cm33_core1) || defined(CPU_MCXN527VKL_cm33_core1))
+#include "MCXN527_cm33_core1_COMMON.h"
+#elif (defined(CPU_MCXN536TVAB_cm33_core0) || defined(CPU_MCXN536TVDF_cm33_core0) || defined(CPU_MCXN536TVKL_cm33_core0) || defined(CPU_MCXN536TVPB_cm33_core0))
+#include "MCXN536T_cm33_core0_COMMON.h"
+#elif (defined(CPU_MCXN536TVAB_cm33_core1) || defined(CPU_MCXN536TVDF_cm33_core1) || defined(CPU_MCXN536TVKL_cm33_core1) || defined(CPU_MCXN536TVPB_cm33_core1))
+#include "MCXN536T_cm33_core1_COMMON.h"
+#elif (defined(CPU_MCXN536VAB_cm33_core0) || defined(CPU_MCXN536VDF_cm33_core0) || defined(CPU_MCXN536VKL_cm33_core0) || defined(CPU_MCXN536VPB_cm33_core0))
+#include "MCXN536_cm33_core0_COMMON.h"
+#elif (defined(CPU_MCXN536VAB_cm33_core1) || defined(CPU_MCXN536VDF_cm33_core1) || defined(CPU_MCXN536VKL_cm33_core1) || defined(CPU_MCXN536VPB_cm33_core1))
+#include "MCXN536_cm33_core1_COMMON.h"
+#elif (defined(CPU_MCXN537TVAB_cm33_core0) || defined(CPU_MCXN537TVDF_cm33_core0) || defined(CPU_MCXN537TVKL_cm33_core0) || defined(CPU_MCXN537TVPB_cm33_core0))
+#include "MCXN537T_cm33_core0_COMMON.h"
+#elif (defined(CPU_MCXN537TVAB_cm33_core1) || defined(CPU_MCXN537TVDF_cm33_core1) || defined(CPU_MCXN537TVKL_cm33_core1) || defined(CPU_MCXN537TVPB_cm33_core1))
+#include "MCXN537T_cm33_core1_COMMON.h"
+#elif (defined(CPU_MCXN537VAB_cm33_core0) || defined(CPU_MCXN537VDF_cm33_core0) || defined(CPU_MCXN537VKL_cm33_core0) || defined(CPU_MCXN537VPB_cm33_core0))
+#include "MCXN537_cm33_core0_COMMON.h"
+#elif (defined(CPU_MCXN537VAB_cm33_core1) || defined(CPU_MCXN537VDF_cm33_core1) || defined(CPU_MCXN537VKL_cm33_core1) || defined(CPU_MCXN537VPB_cm33_core1))
+#include "MCXN537_cm33_core1_COMMON.h"
+#elif (defined(CPU_MCXN546TVAB_cm33_core0) || defined(CPU_MCXN546TVDF_cm33_core0) || defined(CPU_MCXN546TVKL_cm33_core0) || defined(CPU_MCXN546TVPB_cm33_core0))
+#include "MCXN546T_cm33_core0_COMMON.h"
+#elif (defined(CPU_MCXN546TVAB_cm33_core1) || defined(CPU_MCXN546TVDF_cm33_core1) || defined(CPU_MCXN546TVKL_cm33_core1) || defined(CPU_MCXN546TVPB_cm33_core1))
+#include "MCXN546T_cm33_core1_COMMON.h"
+#elif (defined(CPU_MCXN546VAB_cm33_core0) || defined(CPU_MCXN546VDF_cm33_core0) || defined(CPU_MCXN546VKL_cm33_core0) || defined(CPU_MCXN546VNL_cm33_core0) || defined(CPU_MCXN546VPB_cm33_core0))
 #include "MCXN546_cm33_core0_COMMON.h"
-#elif (defined(CPU_MCXN546VDF_cm33_core1) || defined(CPU_MCXN546VKL_cm33_core1) || defined(CPU_MCXN546VNL_cm33_core1) || defined(CPU_MCXN546VPB_cm33_core1))
+#elif (defined(CPU_MCXN546VAB_cm33_core1) || defined(CPU_MCXN546VDF_cm33_core1) || defined(CPU_MCXN546VKL_cm33_core1) || defined(CPU_MCXN546VNL_cm33_core1) || defined(CPU_MCXN546VPB_cm33_core1))
 #include "MCXN546_cm33_core1_COMMON.h"
-#elif (defined(CPU_MCXN547VDF_cm33_core0) || defined(CPU_MCXN547VKL_cm33_core0) || defined(CPU_MCXN547VNL_cm33_core0) || defined(CPU_MCXN547VPB_cm33_core0))
+#elif (defined(CPU_MCXN547TVAB_cm33_core0) || defined(CPU_MCXN547TVDF_cm33_core0) || defined(CPU_MCXN547TVKL_cm33_core0) || defined(CPU_MCXN547TVPB_cm33_core0))
+#include "MCXN547T_cm33_core0_COMMON.h"
+#elif (defined(CPU_MCXN547TVAB_cm33_core1) || defined(CPU_MCXN547TVDF_cm33_core1) || defined(CPU_MCXN547TVKL_cm33_core1) || defined(CPU_MCXN547TVPB_cm33_core1))
+#include "MCXN547T_cm33_core1_COMMON.h"
+#elif (defined(CPU_MCXN547VAB_cm33_core0) || defined(CPU_MCXN547VDF_cm33_core0) || defined(CPU_MCXN547VKL_cm33_core0) || defined(CPU_MCXN547VNL_cm33_core0) || defined(CPU_MCXN547VPB_cm33_core0))
 #include "MCXN547_cm33_core0_COMMON.h"
-#elif (defined(CPU_MCXN547VDF_cm33_core1) || defined(CPU_MCXN547VKL_cm33_core1) || defined(CPU_MCXN547VNL_cm33_core1) || defined(CPU_MCXN547VPB_cm33_core1))
+#elif (defined(CPU_MCXN547VAB_cm33_core1) || defined(CPU_MCXN547VDF_cm33_core1) || defined(CPU_MCXN547VKL_cm33_core1) || defined(CPU_MCXN547VNL_cm33_core1) || defined(CPU_MCXN547VPB_cm33_core1))
 #include "MCXN547_cm33_core1_COMMON.h"
-#elif (defined(CPU_MCXN946VDF_cm33_core0) || defined(CPU_MCXN946VKL_cm33_core0) || defined(CPU_MCXN946VNL_cm33_core0) || defined(CPU_MCXN946VPB_cm33_core0))
+#elif (defined(CPU_MCXN556SCDF_cm33_core0))
+#include "MCXN556S_cm33_core0_COMMON.h"
+#elif (defined(CPU_MCXN556SCDF_cm33_core1))
+#include "MCXN556S_cm33_core1_COMMON.h"
+#elif (defined(CPU_MCXN556TCAB_cm33_core0) || defined(CPU_MCXN556TCDF_cm33_core0) || defined(CPU_MCXN556TVAB_cm33_core0) || defined(CPU_MCXN556TVDF_cm33_core0))
+#include "MCXN556T_cm33_core0_COMMON.h"
+#elif (defined(CPU_MCXN556TCAB_cm33_core1) || defined(CPU_MCXN556TCDF_cm33_core1) || defined(CPU_MCXN556TVAB_cm33_core1) || defined(CPU_MCXN556TVDF_cm33_core1))
+#include "MCXN556T_cm33_core1_COMMON.h"
+#elif (defined(CPU_MCXN557SCDF_cm33_core0))
+#include "MCXN557S_cm33_core0_COMMON.h"
+#elif (defined(CPU_MCXN557SCDF_cm33_core1))
+#include "MCXN557S_cm33_core1_COMMON.h"
+#elif (defined(CPU_MCXN557TCAB_cm33_core0) || defined(CPU_MCXN557TCDF_cm33_core0) || defined(CPU_MCXN557TVAB_cm33_core0) || defined(CPU_MCXN557TVDF_cm33_core0))
+#include "MCXN557T_cm33_core0_COMMON.h"
+#elif (defined(CPU_MCXN557TCAB_cm33_core1) || defined(CPU_MCXN557TCDF_cm33_core1) || defined(CPU_MCXN557TVAB_cm33_core1) || defined(CPU_MCXN557TVDF_cm33_core1))
+#include "MCXN557T_cm33_core1_COMMON.h"
+#elif (defined(CPU_MCXN946TVAB_cm33_core0) || defined(CPU_MCXN946TVDF_cm33_core0) || defined(CPU_MCXN946TVKL_cm33_core0) || defined(CPU_MCXN946TVPB_cm33_core0))
+#include "MCXN946T_cm33_core0_COMMON.h"
+#elif (defined(CPU_MCXN946TVAB_cm33_core1) || defined(CPU_MCXN946TVDF_cm33_core1) || defined(CPU_MCXN946TVKL_cm33_core1) || defined(CPU_MCXN946TVPB_cm33_core1))
+#include "MCXN946T_cm33_core1_COMMON.h"
+#elif (defined(CPU_MCXN946VAB_cm33_core0) || defined(CPU_MCXN946VDF_cm33_core0) || defined(CPU_MCXN946VKL_cm33_core0) || defined(CPU_MCXN946VNL_cm33_core0) || defined(CPU_MCXN946VPB_cm33_core0))
 #include "MCXN946_cm33_core0_COMMON.h"
-#elif (defined(CPU_MCXN946VDF_cm33_core1) || defined(CPU_MCXN946VKL_cm33_core1) || defined(CPU_MCXN946VNL_cm33_core1) || defined(CPU_MCXN946VPB_cm33_core1))
+#elif (defined(CPU_MCXN946VAB_cm33_core1) || defined(CPU_MCXN946VDF_cm33_core1) || defined(CPU_MCXN946VKL_cm33_core1) || defined(CPU_MCXN946VNL_cm33_core1) || defined(CPU_MCXN946VPB_cm33_core1))
 #include "MCXN946_cm33_core1_COMMON.h"
-#elif (defined(CPU_MCXN947VDF_cm33_core0) || defined(CPU_MCXN947VKL_cm33_core0) || defined(CPU_MCXN947VNL_cm33_core0) || defined(CPU_MCXN947VPB_cm33_core0))
+#elif (defined(CPU_MCXN947TVAB_cm33_core0) || defined(CPU_MCXN947TVDF_cm33_core0) || defined(CPU_MCXN947TVKL_cm33_core0) || defined(CPU_MCXN947TVPB_cm33_core0))
+#include "MCXN947T_cm33_core0_COMMON.h"
+#elif (defined(CPU_MCXN947TVAB_cm33_core1) || defined(CPU_MCXN947TVDF_cm33_core1) || defined(CPU_MCXN947TVKL_cm33_core1) || defined(CPU_MCXN947TVPB_cm33_core1))
+#include "MCXN947T_cm33_core1_COMMON.h"
+#elif (defined(CPU_MCXN947VAB_cm33_core0) || defined(CPU_MCXN947VDF_cm33_core0) || defined(CPU_MCXN947VKL_cm33_core0) || defined(CPU_MCXN947VNL_cm33_core0) || defined(CPU_MCXN947VPB_cm33_core0))
 #include "MCXN947_cm33_core0_COMMON.h"
-#elif (defined(CPU_MCXN947VDF_cm33_core1) || defined(CPU_MCXN947VKL_cm33_core1) || defined(CPU_MCXN947VNL_cm33_core1) || defined(CPU_MCXN947VPB_cm33_core1))
+#elif (defined(CPU_MCXN947VAB_cm33_core1) || defined(CPU_MCXN947VDF_cm33_core1) || defined(CPU_MCXN947VKL_cm33_core1) || defined(CPU_MCXN947VNL_cm33_core1) || defined(CPU_MCXN947VPB_cm33_core1))
 #include "MCXN947_cm33_core1_COMMON.h"
 #else
   #error "No valid CPU defined!"
@@ -154,8 +348,6 @@ typedef enum _dma_request_source
     kDma1RequestMuxCtimer4M1        = 16U,         /**< CTIMER4 Match channel 1 request */
     kDma0RequestMuxWuu0             = 17U,         /**< WUU0 Wake up event */
     kDma1RequestMuxWuu0             = 17U,         /**< WUU0 Wake up event */
-    kDma0RequestMuxMicfil0FifoRequest = 18U,       /**< MICFIL0 FIFO_request */
-    kDma1RequestMuxMicfil0FifoRequest = 18U,       /**< MICFIL0 FIFO_request */
     kDma0RequestMuxSct0Dma0         = 19U,         /**< SCT0 DMA0 */
     kDma1RequestMuxSct0Dma0         = 19U,         /**< SCT0 DMA0 */
     kDma0RequestMuxSct0Dma1         = 20U,         /**< SCT0 DMA1 */
@@ -170,6 +362,10 @@ typedef enum _dma_request_source
     kDma1RequestMuxAdc1FifoBRequest = 24U,         /**< ADC1 FIFO B request */
     kDma0RequestMuxDac0FifoRequest  = 25U,         /**< DAC0 FIFO_request */
     kDma1RequestMuxDac0FifoRequest  = 25U,         /**< DAC0 FIFO_request */
+    kDma0RequestMuxDac1FifoRequest  = 26U,         /**< DAC1 FIFO_request */
+    kDma1RequestMuxDac1FifoRequest  = 26U,         /**< DAC1 FIFO_request */
+    kDma0RequestMuxDac2FifoRequest  = 27U,         /**< DAC2 FIFO_request */
+    kDma1RequestMuxDac2FifoRequest  = 27U,         /**< DAC2 FIFO_request */
     kDma0RequestMuxHsCmp0DmaRequest = 28U,         /**< CMP0 DMA_request */
     kDma1RequestMuxHsCmp0DmaRequest = 28U,         /**< CMP0 DMA_request */
     kDma0RequestMuxHsCmp1DmaRequest = 29U,         /**< CMP1 DMA_request */
@@ -206,12 +402,30 @@ typedef enum _dma_request_source
     kDma1RequestMuxFlexPwm0ReqVal2  = 45U,         /**< PWM0 value2 request */
     kDma0RequestMuxFlexPwm0ReqVal3  = 46U,         /**< PWM0 value3 request */
     kDma1RequestMuxFlexPwm0ReqVal3  = 46U,         /**< PWM0 value3 request */
+    kDma0RequestMuxFlexPwm1ReqCapt0 = 47U,         /**< PWM1 capture0 request */
+    kDma1RequestMuxFlexPwm1ReqCapt0 = 47U,         /**< PWM1 capture0 request */
+    kDma0RequestMuxFlexPwm1ReqCapt1 = 48U,         /**< PWM1 capture1 request */
+    kDma1RequestMuxFlexPwm1ReqCapt1 = 48U,         /**< PWM1 capture1 request */
+    kDma0RequestMuxFlexPwm1ReqCapt2 = 49U,         /**< PWM1 capture2 request */
+    kDma1RequestMuxFlexPwm1ReqCapt2 = 49U,         /**< PWM1 capture2 request */
+    kDma0RequestMuxFlexPwm1ReqCapt3 = 50U,         /**< PWM1 capture3 request */
+    kDma1RequestMuxFlexPwm1ReqCapt3 = 50U,         /**< PWM1 capture3 request */
+    kDma0RequestMuxFlexPwm1ReqVal0  = 51U,         /**< PWM1 value0 request */
+    kDma1RequestMuxFlexPwm1ReqVal0  = 51U,         /**< PWM1 value0 request */
+    kDma0RequestMuxFlexPwm1ReqVal1  = 52U,         /**< PWM1 value1 request */
+    kDma1RequestMuxFlexPwm1ReqVal1  = 52U,         /**< PWM1 value1 request */
+    kDma0RequestMuxFlexPwm1ReqVal2  = 53U,         /**< PWM1 value2 request */
+    kDma1RequestMuxFlexPwm1ReqVal2  = 53U,         /**< PWM1 value2 request */
+    kDma0RequestMuxFlexPwm1ReqVal3  = 54U,         /**< PWM0 value3 request */
+    kDma1RequestMuxFlexPwm1ReqVal3  = 54U,         /**< PWM0 value3 request */
     kDma0RequestMuxLptmr0           = 57U,         /**< LPTMR0 Counter match event */
     kDma1RequestMuxLptmr0           = 57U,         /**< LPTMR0 Counter match event */
     kDma0RequestMuxLptmr1           = 58U,         /**< LPTMR1 Counter match event */
     kDma1RequestMuxLptmr1           = 58U,         /**< LPTMR1 Counter match event */
     kDma0RequestMuxFlexCan0DmaRequest = 59U,       /**< CAN0 DMA request */
     kDma1RequestMuxFlexCan0DmaRequest = 59U,       /**< CAN0 DMA request */
+    kDma0RequestMuxFlexCan1DmaRequest = 60U,       /**< CAN1 DMA request */
+    kDma1RequestMuxFlexCan1DmaRequest = 60U,       /**< CAN1 DMA request */
     kDma0RequestMuxFlexIO0ShiftRegister0Request = 61U, /**< FlexIO0 Shifter0 Status DMA request OR Timer0 Status DMA request */
     kDma1RequestMuxFlexIO0ShiftRegister0Request = 61U, /**< FlexIO0 Shifter0 Status DMA request OR Timer0 Status DMA request */
     kDma0RequestMuxFlexIO0ShiftRegister1Request = 62U, /**< FlexIO0 Shifter1 Status DMA request OR Timer1 Status DMA request */
@@ -260,14 +474,6 @@ typedef enum _dma_request_source
     kDma1RequestMuxLpFlexcomm7Rx    = 83U,         /**< LP_FLEXCOMM7 Receive request */
     kDma0RequestMuxLpFlexcomm7Tx    = 84U,         /**< LP_FLEXCOMM7 Transmit request */
     kDma1RequestMuxLpFlexcomm7Tx    = 84U,         /**< LP_FLEXCOMM7 Transmit request */
-    kDma0RequestMuxLpFlexcomm8Rx    = 85U,         /**< LP_FLEXCOMM8 Receive request */
-    kDma1RequestMuxLpFlexcomm8Rx    = 85U,         /**< LP_FLEXCOMM8 Receive request */
-    kDma0RequestMuxLpFlexcomm8Tx    = 86U,         /**< LP_FLEXCOMM8 Transmit request */
-    kDma1RequestMuxLpFlexcomm8Tx    = 86U,         /**< LP_FLEXCOMM8 Transmit request */
-    kDma0RequestMuxLpFlexcomm9Rx    = 87U,         /**< LP_FLEXCOMM9 Receive request */
-    kDma1RequestMuxLpFlexcomm9Rx    = 87U,         /**< LP_FLEXCOMM9 Receive request */
-    kDma0RequestMuxLpFlexcomm9Tx    = 88U,         /**< LP_FLEXCOMM9 Transmit request */
-    kDma1RequestMuxLpFlexcomm9Tx    = 88U,         /**< LP_FLEXCOMM9 Transmit request */
     kDma0RequestMuxEmvSim0Rx        = 91U,         /**< EMVSIM0 Receive request */
     kDma1RequestMuxEmvSim0Rx        = 91U,         /**< EMVSIM0 Receive request */
     kDma0RequestMuxEmvSim0Tx        = 92U,         /**< EMVSIM0 Transmit request */
@@ -284,14 +490,16 @@ typedef enum _dma_request_source
     kDma1RequestMuxI3c1Rx           = 97U,         /**< I3C1 Receive request */
     kDma0RequestMuxI3c1Tx           = 98U,         /**< I3C1 Transmit request */
     kDma1RequestMuxI3c1Tx           = 98U,         /**< I3C1 Transmit request */
-    kDma0RequestMuxSai0Rx           = 99U,         /**< SAI0 Receive request */
-    kDma1RequestMuxSai0Rx           = 99U,         /**< SAI0 Receive request */
-    kDma0RequestMuxSai0Tx           = 100U,        /**< SAI0 Transmit request */
-    kDma1RequestMuxSai0Tx           = 100U,        /**< SAI0 Transmit request */
-    kDma0RequestMuxSai1Rx           = 101U,        /**< SAI1 Receive request */
-    kDma1RequestMuxSai1Rx           = 101U,        /**< SAI1 Receive request */
-    kDma0RequestMuxSai1Tx           = 102U,        /**< SAI1 Transmit request */
-    kDma1RequestMuxSai1Tx           = 102U,        /**< SAI1 Transmit request */
+    kDma0RequestMuxSinc0IpdReqSincAlt0 = 103U,     /**< SINC0 ipd_req_sinc[0] or ipd_req_alt [0] */
+    kDma1RequestMuxSinc0IpdReqSincAlt0 = 103U,     /**< SINC0 ipd_req_sinc[0] or ipd_req_alt [0] */
+    kDma0RequestMuxSinc1IpdReqSincAlt1 = 104U,     /**< SINC0 ipd_req_sinc[1] or ipd_req_alt [1] */
+    kDma1RequestMuxSinc1IpdReqSincAlt1 = 104U,     /**< SINC0 ipd_req_sinc[1] or ipd_req_alt [1] */
+    kDma0RequestMuxSinc2IpdReqSincAlt2 = 105U,     /**< SINC0 ipd_req_sinc[2] or ipd_req_alt [2] */
+    kDma1RequestMuxSinc2IpdReqSincAlt2 = 105U,     /**< SINC0 ipd_req_sinc[2] or ipd_req_alt [2] */
+    kDma0RequestMuxSinc3IpdReqSincAlt3 = 106U,     /**< SINC0 ipd_req_sinc[3] or ipd_req_alt [3] */
+    kDma1RequestMuxSinc3IpdReqSincAlt3 = 106U,     /**< SINC0 ipd_req_sinc[3] or ipd_req_alt [3] */
+    kDma0RequestMuxSinc4IpdReqSincAlt4 = 107U,     /**< SINC0 ipd_req_sinc[4] or ipd_req_alt [4] */
+    kDma1RequestMuxSinc4IpdReqSincAlt4 = 107U,     /**< SINC0 ipd_req_sinc[4] or ipd_req_alt [4] */
     kDma0RequestMuxGpio0PinEventRequest0 = 108U,   /**< GPIO0 Pin event request 0 */
     kDma1RequestMuxGpio0PinEventRequest0 = 108U,   /**< GPIO0 Pin event request 0 */
     kDma0RequestMuxGpio0PinEventRequest1 = 109U,   /**< GPIO0 Pin event request 1 */
@@ -316,44 +524,30 @@ typedef enum _dma_request_source
     kDma1RequestMuxGpio5PinEventRequest0 = 118U,   /**< GPIO5 Pin event request 0 */
     kDma0RequestMuxGpio5PinEventRequest1 = 119U,   /**< GPIO5 Pin event request 1 */
     kDma1RequestMuxGpio5PinEventRequest1 = 119U,   /**< GPIO5 Pin event request 1 */
+    kDma0RequestMuxHsCmp2DmaRequest = 30U,         /**< CMP2 DMA_request */
+    kDma1RequestMuxHsCmp2DmaRequest = 30U,         /**< CMP2 DMA_request */
+    kDma0RequestMuxLpFlexcomm8Rx    = 85U,         /**< LP_FLEXCOMM8 Receive request */
+    kDma1RequestMuxLpFlexcomm8Rx    = 85U,         /**< LP_FLEXCOMM8 Receive request */
+    kDma0RequestMuxLpFlexcomm8Tx    = 86U,         /**< LP_FLEXCOMM8 Transmit request */
+    kDma1RequestMuxLpFlexcomm8Tx    = 86U,         /**< LP_FLEXCOMM8 Transmit request */
+    kDma0RequestMuxLpFlexcomm9Rx    = 87U,         /**< LP_FLEXCOMM9 Receive request */
+    kDma1RequestMuxLpFlexcomm9Rx    = 87U,         /**< LP_FLEXCOMM9 Receive request */
+    kDma0RequestMuxLpFlexcomm9Tx    = 88U,         /**< LP_FLEXCOMM9 Transmit request */
+    kDma1RequestMuxLpFlexcomm9Tx    = 88U,         /**< LP_FLEXCOMM9 Transmit request */
+    kDma0RequestMuxMicfil0FifoRequest = 18U,       /**< MICFIL0 FIFO_request */
+    kDma1RequestMuxMicfil0FifoRequest = 18U,       /**< MICFIL0 FIFO_request */
+    kDma0RequestMuxSai0Rx           = 99U,         /**< SAI0 Receive request */
+    kDma1RequestMuxSai0Rx           = 99U,         /**< SAI0 Receive request */
+    kDma0RequestMuxSai0Tx           = 100U,        /**< SAI0 Transmit request */
+    kDma1RequestMuxSai0Tx           = 100U,        /**< SAI0 Transmit request */
+    kDma0RequestMuxSai1Rx           = 101U,        /**< SAI1 Receive request */
+    kDma1RequestMuxSai1Rx           = 101U,        /**< SAI1 Receive request */
+    kDma0RequestMuxSai1Tx           = 102U,        /**< SAI1 Transmit request */
+    kDma1RequestMuxSai1Tx           = 102U,        /**< SAI1 Transmit request */
     kDma0RequestMuxTsi0EndOfScan    = 120U,        /**< TSI0 End of Scan */
     kDma1RequestMuxTsi0EndOfScan    = 120U,        /**< TSI0 End of Scan */
     kDma0RequestMuxTsi0OutOfRange   = 121U,        /**< TSI0 Out of Range */
     kDma1RequestMuxTsi0OutOfRange   = 121U,        /**< TSI0 Out of Range */
-    kDma0RequestMuxDac1FifoRequest  = 26U,         /**< DAC1 FIFO_request */
-    kDma1RequestMuxDac1FifoRequest  = 26U,         /**< DAC1 FIFO_request */
-    kDma0RequestMuxDac2FifoRequest  = 27U,         /**< DAC2 FIFO_request */
-    kDma1RequestMuxDac2FifoRequest  = 27U,         /**< DAC2 FIFO_request */
-    kDma0RequestMuxHsCmp2DmaRequest = 30U,         /**< CMP2 DMA_request */
-    kDma1RequestMuxHsCmp2DmaRequest = 30U,         /**< CMP2 DMA_request */
-    kDma0RequestMuxFlexPwm1ReqCapt0 = 47U,         /**< PWM1 capture0 request */
-    kDma1RequestMuxFlexPwm1ReqCapt0 = 47U,         /**< PWM1 capture0 request */
-    kDma0RequestMuxFlexPwm1ReqCapt1 = 48U,         /**< PWM1 capture1 request */
-    kDma1RequestMuxFlexPwm1ReqCapt1 = 48U,         /**< PWM1 capture1 request */
-    kDma0RequestMuxFlexPwm1ReqCapt2 = 49U,         /**< PWM1 capture2 request */
-    kDma1RequestMuxFlexPwm1ReqCapt2 = 49U,         /**< PWM1 capture2 request */
-    kDma0RequestMuxFlexPwm1ReqCapt3 = 50U,         /**< PWM1 capture3 request */
-    kDma1RequestMuxFlexPwm1ReqCapt3 = 50U,         /**< PWM1 capture3 request */
-    kDma0RequestMuxFlexPwm1ReqVal0  = 51U,         /**< PWM1 value0 request */
-    kDma1RequestMuxFlexPwm1ReqVal0  = 51U,         /**< PWM1 value0 request */
-    kDma0RequestMuxFlexPwm1ReqVal1  = 52U,         /**< PWM1 value1 request */
-    kDma1RequestMuxFlexPwm1ReqVal1  = 52U,         /**< PWM1 value1 request */
-    kDma0RequestMuxFlexPwm1ReqVal2  = 53U,         /**< PWM1 value2 request */
-    kDma1RequestMuxFlexPwm1ReqVal2  = 53U,         /**< PWM1 value2 request */
-    kDma0RequestMuxFlexPwm1ReqVal3  = 54U,         /**< PWM0 value3 request */
-    kDma1RequestMuxFlexPwm1ReqVal3  = 54U,         /**< PWM0 value3 request */
-    kDma0RequestMuxFlexCan1DmaRequest = 60U,       /**< CAN1 DMA request */
-    kDma1RequestMuxFlexCan1DmaRequest = 60U,       /**< CAN1 DMA request */
-    kDma0RequestMuxSinc0IpdReqSincAlt0 = 103U,     /**< SINC0 ipd_req_sinc[0] or ipd_req_alt [0] */
-    kDma1RequestMuxSinc0IpdReqSincAlt0 = 103U,     /**< SINC0 ipd_req_sinc[0] or ipd_req_alt [0] */
-    kDma0RequestMuxSinc1IpdReqSincAlt1 = 104U,     /**< SINC0 ipd_req_sinc[1] or ipd_req_alt [1] */
-    kDma1RequestMuxSinc1IpdReqSincAlt1 = 104U,     /**< SINC0 ipd_req_sinc[1] or ipd_req_alt [1] */
-    kDma0RequestMuxSinc2IpdReqSincAlt2 = 105U,     /**< SINC0 ipd_req_sinc[2] or ipd_req_alt [2] */
-    kDma1RequestMuxSinc2IpdReqSincAlt2 = 105U,     /**< SINC0 ipd_req_sinc[2] or ipd_req_alt [2] */
-    kDma0RequestMuxSinc3IpdReqSincAlt3 = 106U,     /**< SINC0 ipd_req_sinc[3] or ipd_req_alt [3] */
-    kDma1RequestMuxSinc3IpdReqSincAlt3 = 106U,     /**< SINC0 ipd_req_sinc[3] or ipd_req_alt [3] */
-    kDma0RequestMuxSinc4IpdReqSincAlt4 = 107U,     /**< SINC0 ipd_req_sinc[4] or ipd_req_alt [4] */
-    kDma1RequestMuxSinc4IpdReqSincAlt4 = 107U,     /**< SINC0 ipd_req_sinc[4] or ipd_req_alt [4] */
 } dma_request_source_t;
 
 /* @} */

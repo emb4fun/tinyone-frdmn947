@@ -1,5 +1,5 @@
 /**************************************************************************
-*  Copyright (c) 2020-2025 by Michael Fischer (www.emb4fun.de).
+*  Copyright (c) 2020-2026 by Michael Fischer (www.emb4fun.de).
 *  All rights reserved.
 *
 *  Redistribution and use in source and binary forms, with or without
@@ -45,7 +45,10 @@
 #include "ipweb.h"
 #include "cert.h"
 #include "xmempool.h"
+#include "mbedtls_psa_support.h"
+
 #include "mbedtls/version.h"
+#include "psa/crypto.h"
 #include "elca_client.h"
 
 #include "iperf.h"
@@ -176,7 +179,7 @@ static void SecFunction (void)
       IP_TNP_DHCPCallbackBound(0);
       IP_SNTP_TimeSync();
 
-      nLedMode = LED_MODE_READY;;
+      nLedMode = LED_MODE_READY;
    }
 
    /********************************************/
@@ -519,6 +522,8 @@ static void LEDTask (void *p)
 /*************************************************************************/
 static void StartTask (void *p)
 {
+   psa_status_t status;
+
    (void)p;
 
    /*
@@ -528,6 +533,12 @@ static void StartTask (void *p)
 
    OS_SysTickStart();   /* Start the System ticker */
    OS_StatEnable();     /* Enable the statistic function  */
+
+   /*
+    * Initialize the mbedTLS/PSA crypto support (threading), this must
+    * be done before any other mbedTLS or PSA crypto function is used.
+    */
+   mbedtls_psa_support_init();
 
    /*******************************************************************/
 
@@ -550,6 +561,18 @@ static void StartTask (void *p)
 
    TimeInit();          /* Initialize the system time */
    EntropyInit();       /* Initialize the entropy source */
+
+   /*
+    * Initialize the PSA crypto library, this must be done before any
+    * other TLS or PSA crypto function is used. Additional calls, as
+    * done in web_ssl.c, are allowed and return PSA_SUCCESS again.
+    */
+   status = psa_crypto_init();
+   if (status != PSA_SUCCESS)
+   {
+      term_printf("psa_crypto_init() error: %d\r\n", (int)status);
+   }
+
    EthernetInit();      /* Configure and start the IP interface */
 
    /*
@@ -744,24 +767,5 @@ void term_RxCallback (uint8_t bData)
    } /* end switch (bData) */
 
 } /* term_RxCallback */
-
-/*************************************************************************/
-/*  mbedtls_hardware_poll                                                */
-/*                                                                       */
-/*  mbedTLS support function to retrieve RNG data.                       */
-/*                                                                       */
-/*  In    : data, output, olen                                           */
-/*  Out   : output, olen                                                 */
-/*  Return: 0 = OK                                                       */
-/*************************************************************************/
-int mbedtls_hardware_poll (void *data, unsigned char *output, size_t len, size_t *olen)
-{
-   (void)data;
-
-   tal_CPURngHardwarePoll(output, len);
-   *olen = len;
-
-   return(0);
-} /* mbedtls_hardware_poll */
 
 /*** EOF ***/

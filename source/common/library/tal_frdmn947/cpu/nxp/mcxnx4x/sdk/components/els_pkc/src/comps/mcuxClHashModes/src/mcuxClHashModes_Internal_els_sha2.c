@@ -1,14 +1,34 @@
 /*--------------------------------------------------------------------------*/
-/* Copyright 2020-2024 NXP                                                  */
+/* Copyright 2020-2025 NXP                                                  */
 /*                                                                          */
-/* NXP Proprietary. This software is owned or controlled by NXP and may     */
-/* only be used strictly in accordance with the applicable license terms.   */
-/* By expressly accepting such terms or by downloading, installing,         */
-/* activating and/or otherwise using the software, you are agreeing that    */
-/* you have read, and that you agree to comply with and are bound by, such  */
-/* license terms.  If you do not agree to be bound by the applicable        */
-/* license terms, then you may not retain, install, activate or otherwise   */
-/* use the software.                                                        */
+/* SPDX-License-Identifier: BSD-3-Clause                                    */
+/*                                                                          */
+/* Redistribution and use in source and binary forms, with or without       */
+/* modification, are permitted provided that the following conditions are   */
+/* met:                                                                     */
+/*                                                                          */
+/* 1. Redistributions of source code must retain the above copyright        */
+/*    notice, this list of conditions and the following disclaimer.         */
+/*                                                                          */
+/* 2. Redistributions in binary form must reproduce the above copyright     */
+/*    notice, this list of conditions and the following disclaimer in the   */
+/*    documentation and/or other materials provided with the distribution.  */
+/*                                                                          */
+/* 3. Neither the name of the copyright holder nor the names of its         */
+/*    contributors may be used to endorse or promote products derived from  */
+/*    this software without specific prior written permission.              */
+/*                                                                          */
+/* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS  */
+/* IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED    */
+/* TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A          */
+/* PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT       */
+/* HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,   */
+/* SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED */
+/* TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR   */
+/* PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF   */
+/* LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING     */
+/* NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS       */
+/* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.             */
 /*--------------------------------------------------------------------------*/
 
 #include <mcuxClToolchain.h>
@@ -31,7 +51,7 @@
  * Constants
  **********************************************************/
 /* IV taken from: nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf (Big-Endian Representation) */
-static const ALIGNED uint8_t mcuxClHashModes_els_sha512_224_iv[MCUXCLHASH_STATE_SIZE_SHA_512] =
+const static ALIGNED uint8_t mcuxClHashModes_els_sha512_224_iv[MCUXCLHASH_STATE_SIZE_SHA_512] =
 {
     0x8cu, 0x3du, 0x37u, 0xc8u, 0x19u, 0x54u, 0x4du, 0xa2u,
     0x73u, 0xe1u, 0x99u, 0x66u, 0x89u, 0xdcu, 0xd4u, 0xd6u,
@@ -44,7 +64,7 @@ static const ALIGNED uint8_t mcuxClHashModes_els_sha512_224_iv[MCUXCLHASH_STATE_
 };
 
 /* IV taken from: nvlpubs.nist.gov/nistpubs/FIPS/NIST.FIPS.180-4.pdf (Big-Endian Representation) */
-static const ALIGNED uint8_t mcuxClHashModes_els_sha512_256_iv[MCUXCLHASH_STATE_SIZE_SHA_512] =
+const static ALIGNED uint8_t mcuxClHashModes_els_sha512_256_iv[MCUXCLHASH_STATE_SIZE_SHA_512] =
 {
     0x22u, 0x31u, 0x21u, 0x94u, 0xfcu, 0x2bu, 0xf7u, 0x2cu,
     0x9fu, 0x55u, 0x5fu, 0xa3u, 0xc8u, 0x4cu, 0x64u, 0xc2u,
@@ -332,8 +352,6 @@ static MCUX_CSSL_FP_PROTECTED_TYPE(mcuxClHash_Status_t) mcuxClHashModes_Els_oneS
     MCUX_CSSL_ANALYSIS_ASSERT_PARAMETER(sizeOfFullBlocks, 0u, inSize, MCUXCLHASH_STATUS_FAILURE)
     size_t posdst = inSize - sizeOfFullBlocks;
     size_t buflen = algorithm->blockSize;
-
-    (void)session;
 
     /* Copy the data to the buffer in the workspace. */
     MCUXCLMEMORY_FP_MEMORY_COPY_WITH_BUFF(shablock, &pIn[sizeOfFullBlocks], posdst, buflen);
@@ -733,7 +751,7 @@ static MCUX_CSSL_FP_PROTECTED_TYPE(mcuxClHash_Status_t) mcuxClHashModes_Els_oneS
     uint8_t *shablock = (uint8_t *) mcuxClSession_allocateWords_cpuWa(session, MCUXCLCORE_NUM_OF_CPUWORDS_CEIL(algorithm->blockSize));
     if(NULL == shablock)
     {
-        MCUX_CSSL_FP_FUNCTION_EXIT(mcuxClHashModes_Els_oneShot_Sha2, MCUXCLHASH_STATUS_FAILURE);
+        MCUX_CSSL_FP_FUNCTION_EXIT(mcuxClHashModes_Els_oneShot_Sha2_Truncated, MCUXCLHASH_STATUS_FAILURE);
     }
 
     MCUX_CSSL_FP_FUNCTION_CALL(resultHandlePadding, mcuxClHashModes_Els_oneShot_Sha2_Padding(
@@ -749,7 +767,7 @@ static MCUX_CSSL_FP_PROTECTED_TYPE(mcuxClHash_Status_t) mcuxClHashModes_Els_oneS
     {
         /* Free workarea (shablock + poutput) and exit */
         mcuxClSession_freeWords_cpuWa(session, MCUXCLCORE_NUM_OF_CPUWORDS_CEIL(algorithm->blockSize) + MCUXCLCORE_NUM_OF_CPUWORDS_CEIL(algorithm->stateSize));
-        MCUX_CSSL_FP_FUNCTION_EXIT(mcuxClHashModes_Els_oneShot_Sha2, resultHandlePadding,
+        MCUX_CSSL_FP_FUNCTION_EXIT(mcuxClHashModes_Els_oneShot_Sha2_Truncated, resultHandlePadding,
             MCUX_CSSL_FP_FUNCTION_CALLED(mcuxClHashModes_Els_oneShot_Sha2_Padding)
         );
     }
@@ -1603,7 +1621,7 @@ static MCUX_CSSL_FP_PROTECTED_TYPE(mcuxClHash_Status_t) mcuxClHashModes_Els_load
  * @param[out]      pOutSize          stored hash size
  * @param[in,out]   pHashOptions      hash options to be used for ELS
  */
-MCUX_CSSL_FP_FUNCTION_DEF(mcuxClHashModes_Els_finish_Sha2, mcuxClHash_AlgoSkeleton_Finish_t)
+MCUX_CSSL_FP_FUNCTION_DEF(mcuxClHashModes_Els_finish_Sha2_init)
 static MCUX_CSSL_FP_PROTECTED_TYPE(mcuxClHash_Status_t) mcuxClHashModes_Els_finish_Sha2_init (
                         mcuxClSession_Handle_t session,
                         mcuxClHash_Context_t context,
@@ -1612,8 +1630,6 @@ static MCUX_CSSL_FP_PROTECTED_TYPE(mcuxClHash_Status_t) mcuxClHashModes_Els_fini
                         mcuxClEls_HashOption_t *hashOptions)
 {
     MCUX_CSSL_FP_FUNCTION_ENTRY(mcuxClHashModes_Els_finish_Sha2_init);
-
-    (void)pOutSize;
 
    /**************************************************************************************
      * Step 1: Initialization - Calculate sizes, set pointers, and set ELS options for

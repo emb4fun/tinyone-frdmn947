@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2024 NXP.
+ * Copyright 2019-2025 NXP.
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -126,16 +126,25 @@ void WUU_SetExternalWakeUpPinsConfig(WUU_Type *base, uint8_t pinIndex, const wuu
  */
 void WUU_ClearExternalWakeupPinsConfig(WUU_Type *base, uint8_t pinIndex)
 {
+    volatile uint32_t *edgeRegBase;
+    volatile uint32_t *eventRegBase;
+    uint32_t offset = 2UL * ((uint32_t)pinIndex & 0xFU);
+
+    base->PMC &= ~(WUU_PMC_REG_BIT_FIELD_MASK << (uint32_t)pinIndex);
+
     if (pinIndex <= 15U)
     {
-        base->PE1 &= ~(WUU_PE_REG_BIT_FIELD_MASK << (2UL * (uint32_t)pinIndex));
-        base->PDC1 &= ~(WUU_PDC_REG_BIT_FIELD_MASK << (2UL * (uint32_t)pinIndex));
+        edgeRegBase  = &base->PE1;
+        eventRegBase = &base->PDC1;
     }
     else
     {
-        base->PE1 &= ~(WUU_PE_REG_BIT_FIELD_MASK << (2UL * (uint32_t)((uint32_t)pinIndex % 16UL)));
-        base->PDC1 &= ~(WUU_PDC_REG_BIT_FIELD_MASK << (2UL * (uint32_t)((uint32_t)pinIndex % 16UL)));
+        edgeRegBase  = &base->PE2;
+        eventRegBase = &base->PDC2;
     }
+
+    *edgeRegBase &= ~(WUU_PE_REG_BIT_FIELD_MASK << offset);
+    *eventRegBase &= ~(WUU_PDC_REG_BIT_FIELD_MASK << offset);
 }
 
 /*!
@@ -205,6 +214,10 @@ void WUU_SetPinFilterConfig(WUU_Type *base, uint8_t filterIndex, const wuu_pin_f
     uint32_t eventReg;
     uint32_t modeReg;
 
+    /* INT30-C: Prevent unsigned integer underflow in filterIndex - 1U */
+    assert(filterIndex >= 1U);
+    /* INT31-C: Ensure (filterIndex - 1U) * 8U fits in uint8_t */
+    assert((filterIndex - 1U) <= (UINT8_MAX / 8U));
     shift     = (filterIndex - 1U) * 8U;
     filterReg = base->FILT;
     filterReg &= WUU_CLEAR_BIT_FIELD_IN_REG(WUU_FILT_REG_FILTE_FIELD_MASK, shift);
@@ -278,6 +291,9 @@ void WUU_ClearPinFilterFlag(WUU_Type *base, uint8_t filterIndex)
     /* Clean the W1C bits, in case the flags are cleared by mistake. */
     reg &= ~(WUU_FILT_FILTF1_MASK | WUU_FILT_FILTF2_MASK);
 
+    /* INT30-C: Prevent unsigned integer underflow in filterIndex - 1U */
+    assert(filterIndex >= 1U);
+    /* INT31-C: Ensure result fits in shift amount for 32-bit operation */
     reg |= WUU_SET_BIT_FIELD_IN_REG(WUU_FILT_FILTF1_MASK, ((filterIndex - 1U) * 8U));
 
     base->FILT = reg;

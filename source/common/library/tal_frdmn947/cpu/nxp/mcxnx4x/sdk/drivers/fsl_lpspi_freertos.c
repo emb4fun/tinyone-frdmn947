@@ -16,6 +16,10 @@ static void LPSPI_RTOS_Callback(LPSPI_Type *base, lpspi_master_handle_t *drv_han
 {
     lpspi_rtos_handle_t *handle = (lpspi_rtos_handle_t *)userData;
     BaseType_t reschedule = pdFALSE;
+    if (handle == NULL)
+    {
+        return;
+    }
     handle->async_status = status;
     (void)xSemaphoreGiveFromISR(handle->event, &reschedule);
     portYIELD_FROM_ISR(reschedule);
@@ -100,7 +104,7 @@ status_t LPSPI_RTOS_Transfer(lpspi_rtos_handle_t *handle, lpspi_transfer_t *tran
     status_t status;
 
     /* Lock resource mutex */
-    if (xSemaphoreTake(handle->mutex, portMAX_DELAY) != pdTRUE)
+    if (xSemaphoreTake(handle->mutex, portMAX_DELAY) != (BaseType_t)pdTRUE)
     {
         return kStatus_LPSPI_Busy;
     }
@@ -114,7 +118,7 @@ status_t LPSPI_RTOS_Transfer(lpspi_rtos_handle_t *handle, lpspi_transfer_t *tran
     }
 
     /* Wait for transfer to finish */
-    if (xSemaphoreTake(handle->event, portMAX_DELAY) != pdTRUE)
+    if (xSemaphoreTake(handle->event, portMAX_DELAY) != (BaseType_t)pdTRUE)
     {
         return kStatus_LPSPI_Error;
     }

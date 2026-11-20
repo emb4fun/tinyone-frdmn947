@@ -1,13 +1,13 @@
 /*
- * Copyright 2017-2018,2023 NXP
+ * Copyright 2017-2018,2023,2025 NXP
  * All rights reserved.
  *
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
 
-#ifndef _PUF_V3_H_
-#define _PUF_V3_H_
+#ifndef FSL_PUF_V3_H_
+#define FSL_PUF_V3_H_
 
 #include <stddef.h>
 #include <stdint.h>
@@ -23,11 +23,13 @@
  */
 /*! @name Driver version */
 /*! @{ */
-/*! @brief PUFv3 driver version. Version 2.0.3.
+/*! @brief PUFv3 driver version. Version 2.0.4.
  *
- * Current version: 2.0.3
+ * Current version: 2.0.4
  *
  * Change log:
+ * - 2.0.4
+ *   - Fix warning
  * - 2.0.3
  *   - Update for various PUF CTRL wrapper
  * - 2.0.2
@@ -37,7 +39,7 @@
  * - 2.0.0
  *   - Initial version.
  */
-#define FSL_PUF_V3_DRIVER_VERSION (MAKE_VERSION(2, 0, 3))
+#define FSL_PUF_V3_DRIVER_VERSION (MAKE_VERSION(2, 0, 4))
 /*! @} */
 
 #define kPUF_EndianLittle (0x0u)
@@ -326,4 +328,4 @@ status_t PUF_SetCtxMask(PUF_Type *base, uint32_t appCtxMask);
 }
 #endif /* __cplusplus */
 
-#endif /* _PUF_H_ */
+#endif /* PUF_H_ */

@@ -16,7 +16,7 @@
 /*! @name Driver version */
 /*! @{ */
 /*! @brief I3C EDMA driver version. */
-#define FSL_I3C_EDMA_DRIVER_VERSION (MAKE_VERSION(2, 2, 10))
+#define FSL_I3C_EDMA_DRIVER_VERSION (MAKE_VERSION(2, 2, 13))
 /*! @} */
 
 /*!
@@ -161,6 +161,11 @@ void I3C_MasterTransferCreateHandleEDMA(I3C_Type *base,
  *
  * The callback specified when the @a handle was created is invoked when the transaction has
  * completed.
+ *
+ * @note On parts affected by ERR053412, the I3C controller stalls SCL when the RxFIFO
+ * becomes full and does not recover after CPU read FIFO, bus will be stalling indefinitely.
+ * This DMA-based API services the RxFIFO with EDMA so it never fills, and is the
+ * recommended workaround on affected parts.
  *
  * @param base The I3C peripheral base address.
  * @param handle Pointer to the I3C master driver handle.

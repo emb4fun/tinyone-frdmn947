@@ -1,5 +1,5 @@
 /*
- * Copyright 2019-2022, 2024 NXP
+ * Copyright 2019-2022, 2024-2026 NXP
  * All rights reserved.
  *
  * SPDX-License-Identifier: BSD-3-Clause
@@ -51,14 +51,14 @@ static uint32_t VREF_GetInstance(VREF_Type *base)
      * (instance >= ARRAY_SIZE(s_vrefBases)) not covered. The peripheral base
      * address is always valid and checked by assert.
      */
-    for (instance = 0; instance < ARRAY_SIZE(s_vrefBases); instance++)
+    for (instance = 0; instance < ARRAY_SIZE(s_vrefBases); instance++) /* GCOVR_EXCL_BR_LINE */
     {
         /*
          * $Branch Coverage Justification$
          * (s_vrefBases[instance] != base) not covered. The peripheral base
          * address is always valid and checked by assert.
          */
-        if (MSDK_REG_SECURE_ADDR(s_vrefBases[instance]) == MSDK_REG_SECURE_ADDR(base))
+        if (MSDK_REG_NONSECURE_ADDR(s_vrefBases[instance]) == MSDK_REG_NONSECURE_ADDR(base)) /* GCOVR_EXCL_BR_LINE */
         {
             break;
         }
@@ -96,9 +96,16 @@ void VREF_Init(VREF_Type *base, const vref_config_t *config)
     CLOCK_EnableClock(s_vrefClocks[VREF_GetInstance(base)]);
 #endif /* FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL */
 
+#if !(defined(FSL_FEATURE_VREF_HAS_LPBGEN) && (FSL_FEATURE_VREF_HAS_LPBGEN == 0U))
     base->CSR |= VREF_CSR_LPBGEN_MASK;
+#endif
+
+#if (defined(FSL_FEATURE_VREF_HAS_IBIAS_EN) && (FSL_FEATURE_VREF_HAS_IBIAS_EN != 0U))
+    base->CSR |= VREF_CSR_IBIAS_EN_MASK;
+#endif
+
     /* After enabling low power bandgap, delay 20 us. */
-    SDK_DelayAtLeastUs(20U, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+    SDK_DelayAtLeastUs(20U, SystemCoreClock);
 
 #if !(defined(FSL_FEATURE_VREF_HAS_LOWPOWER_BUFFER) && (FSL_FEATURE_VREF_HAS_LOWPOWER_BUFFER == 0U))
     /* Provides bias current for other peripherals. */
@@ -141,7 +148,7 @@ void VREF_Init(VREF_Type *base, const vref_config_t *config)
 
         base->CSR |= tmp32;
         /* After enabling high accurancy bandgap, delay 400 us. */
-        SDK_DelayAtLeastUs(400U, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+        SDK_DelayAtLeastUs(400U, SystemCoreClock);
     }
 }
 
@@ -218,22 +225,31 @@ void VREF_SetVrefTrimVal(VREF_Type *base, uint8_t trimValue)
 
     base->UTRIM = tmp32;
 
-    if (VREF_CSR_CHOPEN_MASK == (base->CSR & VREF_CSR_CHOPEN_MASK))
+    /*
+     * $Branch Coverage Justification$
+     * (VREF_CSR_CHOPEN_MASK != (base->CSR & VREF_CSR_CHOPEN_MASK)) not covered.
+     * Test unfeasible, clearing CHOPEN routes execution to the VREFST polling
+     * path below, and the hardware stable transition cannot be observed
+     * reliably in unit test.
+     */
+    if (VREF_CSR_CHOPEN_MASK == (base->CSR & VREF_CSR_CHOPEN_MASK)) /* GCOVR_EXCL_BR_LINE */
     {
         /* After enabling high accurancy bandgap, delay 400 us. */
-        SDK_DelayAtLeastUs(400U, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+        SDK_DelayAtLeastUs(400U, SystemCoreClock);
     }
     else
     {
         /*Wait internal HC voltage reference stable*/
         /*
          * $Branch Coverage Justification$
-         * while ((base->CSR & VREF_CSR_VREFST_MASK) != 0U) not covered. Test unfeasible,
+         * while ((base->CSR & VREF_CSR_VREFST_MASK) == 0U) not covered. Test unfeasible,
          * the internal HC voltage stable state is too short not to catch.
          */
-        while ((base->CSR & VREF_CSR_VREFST_MASK) == 0U)
+        /* GCOVR_EXCL_START */
+        while ((base->CSR & VREF_CSR_VREFST_MASK) == 0U) /* GCOVR_EXCL_BR_LINE */
         {
         }
+        /* GCOVR_EXCL_STOP */
     }
 }
 
@@ -259,22 +275,31 @@ void VREF_SetTrim21Val(VREF_Type *base, uint8_t trim21Value)
 
     base->UTRIM = tmp32;
 
-    if (VREF_CSR_CHOPEN_MASK == (base->CSR & VREF_CSR_CHOPEN_MASK))
+    /*
+     * $Branch Coverage Justification$
+     * (VREF_CSR_CHOPEN_MASK != (base->CSR & VREF_CSR_CHOPEN_MASK)) not covered.
+     * Test unfeasible, clearing CHOPEN routes execution to the VREFST polling
+     * path below, and the hardware stable transition cannot be observed
+     * reliably in unit test.
+     */
+    if (VREF_CSR_CHOPEN_MASK == (base->CSR & VREF_CSR_CHOPEN_MASK)) /* GCOVR_EXCL_BR_LINE */
     {
         /* After enabling high accurancy bandgap, delay 400 us. */
-        SDK_DelayAtLeastUs(400U, SDK_DEVICE_MAXIMUM_CPU_CLOCK_FREQUENCY);
+        SDK_DelayAtLeastUs(400U, SystemCoreClock);
     }
     else
     {
         /*Wait internal HC voltage reference stable*/
         /*
          * $Branch Coverage Justification$
-         * while ((base->CSR & VREF_CSR_VREFST_MASK) != 0U) not covered. Test unfeasible,
+         * while ((base->CSR & VREF_CSR_VREFST_MASK) == 0U) not covered. Test unfeasible,
          * the internal HC voltage stable state is too short not to catch.
          */
-        while ((base->CSR & VREF_CSR_VREFST_MASK) == 0U)
+        /* GCOVR_EXCL_START */
+        while ((base->CSR & VREF_CSR_VREFST_MASK) == 0U) /* GCOVR_EXCL_BR_LINE */
         {
         }
+        /* GCOVR_EXCL_STOP */
     }
 }
 #endif /* FSL_FEATURE_VREF_HAS_TRIM2V1 */

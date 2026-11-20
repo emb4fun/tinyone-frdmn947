@@ -1,5 +1,5 @@
 /*
- * Copyright 2022-2025 NXP
+ * Copyright 2022-2026 NXP
  *
  * SPDX-License-Identifier: BSD-3-Clause
  */
@@ -42,7 +42,12 @@
 #define ENET_HEAD_AVBTYPE_OFFSET (16)
 
 /*! @brief Binary rollover mode count convert */
-#define ENET_BINARY_ROLLOVER_SCALE(x) (uint32_t)((uint64_t)(x) * 46566U / 100000U)
+#define ENET_BINARY_ROLLOVER_SCALE(x) (uint32_t)((uint64_t)(x)*46566U / 100000U)
+
+#ifndef ENET_DMA_MODE_SWR_READ_DELAY
+/*! @brief Delay before reading of SWR bit after reset initiation */
+#define ENET_DMA_MODE_SWR_READ_DELAY (100UL)
+#endif
 
 /*******************************************************************************
  * Prototypes
@@ -182,7 +187,7 @@ static void ENET_SetSYSControl(enet_mii_mode_t miiMode)
     SYSCON->PRESETCTRL[2] &= ~SYSCON_PRESETCTRL_ETH_RST_MASK;
     /* Set MII/RMII before the peripheral ethernet dma reset. */
     SYSCON->ETHPHYSEL = (SYSCON->ETHPHYSEL & ~SYSCON_ETHPHYSEL_PHY_SEL_MASK) | SYSCON_ETHPHYSEL_PHY_SEL(miiMode);
-#else
+#elif defined(SYSCON_ENET_PHY_INTF_SEL_PHY_SEL_MASK)
     /* Reset first. */
     SYSCON0->PRESETCTRL2 = SYSCON_PRESETCTRL2_ENET_RST_MASK;
     SYSCON0->PRESETCTRL2 &= ~SYSCON_PRESETCTRL2_ENET_RST_MASK;
@@ -199,13 +204,28 @@ static void ENET_SetDMAControl(ENET_Type *base, const enet_config_t *config)
     uint8_t index;
     uint32_t reg;
     uint32_t burstLen;
+    uint32_t cr;
+
+    /* Preserve CSR clock range for MDC clock before reset */
+    cr = base->MAC_MDIO_ADDRESS & ENET_MAC_MDIO_ADDRESS_CR_MASK;
 
     /* Reset first and wait for the complete
      * The reset bit will automatically be cleared after complete. */
     base->DMA_MODE |= ENET_DMA_MODE_SWR_MASK;
+
+    /* Wait before reading SWR bit */
+    for (uint32_t i = 0U; i < ENET_DMA_MODE_SWR_READ_DELAY; i++)
+    {
+        __NOP();
+    }
+
+    /* Wait until reset is complete */
     while ((base->DMA_MODE & ENET_DMA_MODE_SWR_MASK) != 0U)
     {
     }
+
+    /* Restore CSR clock range for MDC clock after reset */
+    base->MAC_MDIO_ADDRESS = (base->MAC_MDIO_ADDRESS & ~ENET_MAC_MDIO_ADDRESS_CR_MASK) | cr;
 
     /* Set the burst length. */
     for (index = 0; index < ENET_RING_NUM_MAX; index++)
@@ -228,11 +248,12 @@ static void ENET_SetDMAControl(ENET_Type *base, const enet_config_t *config)
 static void ENET_SetMTL(ENET_Type *base, const enet_config_t *config)
 {
     assert(config);
-
-    uint32_t txqOpreg                   = 0;
-    uint32_t rxqOpReg                   = 0;
+    uint32_t txqOpreg = 0;
+    uint32_t rxqOpReg = 0;
+#if ENET_RING_NUM_MAX > 1
     enet_multiqueue_config_t *multiqCfg = config->multiqueueCfg;
     uint8_t index;
+#endif /* ENET_RING_NUM_MAX > 1 */
 
     /* Set transmit operation mode. */
     if ((config->specialControl & (uint16_t)kENET_StoreAndForward) != 0U)
@@ -240,16 +261,27 @@ static void ENET_SetMTL(ENET_Type *base, const enet_config_t *config)
         txqOpreg = ENET_MTL_QUEUE_MTL_TXQX_OP_MODE_TSF_MASK;
         rxqOpReg = ENET_MTL_QUEUE_MTL_RXQX_OP_MODE_RSF_MASK;
     }
-    txqOpreg |= ENET_MTL_QUEUE_MTL_TXQX_OP_MODE_FTQ_MASK |
-                ENET_MTL_QUEUE_MTL_TXQX_OP_MODE_TQS(ENET_MTL_TXFIFOSIZE / ENET_FIFOSIZE_UNIT - 1UL);
+    txqOpreg |= ENET_MTL_QUEUE_MTL_TXQX_OP_MODE_FTQ_MASK;
+#ifdef ENET_MTL_QUEUE_MTL_TXQX_OP_MODE_TQS
+    txqOpreg |= ENET_MTL_QUEUE_MTL_TXQX_OP_MODE_TQS(ENET_MTL_TXFIFOSIZE / ENET_FIFOSIZE_UNIT - 1UL);
+#endif /* ENET_MTL_QUEUE_MTL_TXQX_OP_MODE_TQS */
+#ifdef ENET_MTL_QUEUE_MTL_TXQX_OP_MODE_TXQEN
     base->MTL_QUEUE[0].MTL_TXQX_OP_MODE = txqOpreg | ENET_MTL_QUEUE_MTL_TXQX_OP_MODE_TXQEN(2);
+#else
+    base->MTL_QUEUE[0].MTL_TXQX_OP_MODE = txqOpreg;
+#endif /* ENET_MTL_QUEUE_MTL_TXQX_OP_MODE_TXQEN */
+#if ENET_RING_NUM_MAX > 1
     base->MTL_QUEUE[1].MTL_TXQX_OP_MODE = txqOpreg;
+#endif /* ENET_RING_NUM_MAX > 1 */
 
     /* Set receive operation mode. */
-    rxqOpReg |= ENET_MTL_QUEUE_MTL_RXQX_OP_MODE_FUP_MASK |
-                ENET_MTL_QUEUE_MTL_RXQX_OP_MODE_RQS(ENET_MTL_RXFIFOSIZE / ENET_FIFOSIZE_UNIT - 1UL);
+    rxqOpReg |= ENET_MTL_QUEUE_MTL_RXQX_OP_MODE_FUP_MASK;
+#ifdef ENET_MTL_QUEUE_MTL_RXQX_OP_MODE_RQS
+    rxqOpReg |= ENET_MTL_QUEUE_MTL_RXQX_OP_MODE_RQS(ENET_MTL_RXFIFOSIZE / ENET_FIFOSIZE_UNIT - 1UL);
+#endif /* ENET_MTL_QUEUE_MTL_RXQX_OP_MODE_RQS */
     base->MTL_QUEUE[0].MTL_RXQX_OP_MODE = rxqOpReg;
 
+#if ENET_RING_NUM_MAX > 1
     /* Set the schedule/arbitration(set for multiple queues). */
     if (multiqCfg != NULL)
     {
@@ -268,6 +300,7 @@ static void ENET_SetMTL(ENET_Type *base, const enet_config_t *config)
             base->MTL_QUEUE[index].MTL_RXQX_CTRL = ENET_MTL_QUEUE_MTL_RXQX_CTRL_RXQ_WEGT(multiqCfg->rxqueweight[index]);
         }
     }
+#endif /* ENET_RING_NUM_MAX > 1 */
 }
 
 static void ENET_SetMacControl(ENET_Type *base, const enet_config_t *config, uint8_t *macAddr, uint32_t clkSrcHz)
@@ -296,9 +329,11 @@ static void ENET_SetMacControl(ENET_Type *base, const enet_config_t *config, uin
         base->MAC_TX_FLOW_CTRL_Q[0] = ENET_MAC_TX_FLOW_CTRL_Q_PT(config->pauseDuration);
     }
 
+#ifdef ENET_MAC_ONEUS_TIC_COUNTER_TIC_1US_CNTR
     /* Set the 1us ticket. */
     reg                         = clkSrcHz / ENET_MICRSECS_ONESECOND - 1U;
     base->MAC_ONEUS_TIC_COUNTER = ENET_MAC_ONEUS_TIC_COUNTER_TIC_1US_CNTR(reg);
+#endif /* ENET_MAC_ONEUS_TIC_COUNTER_TIC_1US_CNTR */
 
     /* Set the speed and duplex. */
     reg = ENET_MAC_CONFIGURATION_ECRSFD_MASK | ENET_MAC_CONFIGURATION_PS_MASK |
@@ -311,8 +346,10 @@ static void ENET_SetMacControl(ENET_Type *base, const enet_config_t *config, uin
     }
     base->MAC_CONFIGURATION = reg;
 
+#ifdef ENET_MAC_RXQ_CTRL_RXQ0EN
     /* Enable channel. */
     base->MAC_RXQ_CTRL[0] = ENET_MAC_RXQ_CTRL_RXQ0EN(1) | ENET_MAC_RXQ_CTRL_RXQ1EN(1);
+#endif /* ENET_MAC_RXQ_CTRL_RXQ0EN */
 }
 
 static status_t ENET_TxDescriptorsInit(ENET_Type *base, const enet_buffer_config_t *bufferConfig, uint8_t channel)
@@ -479,14 +516,22 @@ static void ENET_SetPtp1588(ENET_Type *base, const enet_config_t *config, uint32
     /* Initialize the sub-second increment register. */
     if (ptpConfig->tsRollover != kENET_BinaryRollover)
     {
+#ifdef ENET_MAC_SUB_SECOND_INCREMENT_SNSINC_MASK
         base->MAC_SUB_SECOND_INCREMENT = ENET_MAC_SUB_SECOND_INCREMENT_SNSINC(ENET_NANOSECS_ONESECOND / ptpClkHz);
+#else
+        base->MAC_SUB_SECOND_INCREMENT = ENET_MAC_SUB_SECOND_INCREMENT_SSINC(ENET_NANOSECS_ONESECOND / ptpClkHz);
+#endif
         base->MAC_SYSTEM_TIME_NANOSECONDS_UPDATE = 0;
     }
     else
     {
         /* Round up. */
-        uint32_t data                            = ENET_MAC_SYSTEM_TIME_NANOSECONDS_TSSS_MASK / ptpClkHz;
-        base->MAC_SUB_SECOND_INCREMENT           = ENET_MAC_SUB_SECOND_INCREMENT_SNSINC(data);
+        uint32_t data = ENET_MAC_SYSTEM_TIME_NANOSECONDS_TSSS_MASK / ptpClkHz;
+#ifdef ENET_MAC_SUB_SECOND_INCREMENT_SNSINC_MASK
+        base->MAC_SUB_SECOND_INCREMENT = ENET_MAC_SUB_SECOND_INCREMENT_SNSINC(data);
+#else
+        base->MAC_SUB_SECOND_INCREMENT = ENET_MAC_SUB_SECOND_INCREMENT_SSINC(data);
+#endif
         base->MAC_SYSTEM_TIME_NANOSECONDS_UPDATE = 0;
     }
     /* Set the second.*/
@@ -504,7 +549,7 @@ uint32_t ENET_GetInstance(ENET_Type *base)
     /* Find the instance index from base address mappings. */
     for (instance = 0U; instance < (uint32_t)FSL_FEATURE_SOC_MCX_ENET_COUNT; instance++)
     {
-        if (MSDK_REG_SECURE_ADDR(s_enetBases[instance]) == MSDK_REG_SECURE_ADDR(base))
+        if (MSDK_REG_NONSECURE_ADDR(s_enetBases[instance]) == MSDK_REG_NONSECURE_ADDR(base))
         {
             break;
         }
@@ -610,12 +655,27 @@ void ENET_Init(ENET_Type *base, const enet_config_t *config, uint8_t *macAddr, u
  */
 void ENET_Deinit(ENET_Type *base)
 {
+    uint32_t cr;
+
+    /* Preserve CSR clock range for MDC clock before reset */
+    cr = base->MAC_MDIO_ADDRESS & ENET_MAC_MDIO_ADDRESS_CR_MASK;
+
     /* Reset first and wait for the complete
      * The reset bit will automatically be cleared after complete. */
     base->DMA_MODE |= ENET_DMA_MODE_SWR_MASK;
+
+    /* Wait before reading SWR bit */
+    for (uint32_t i = 0U; i < ENET_DMA_MODE_SWR_READ_DELAY; i++)
+    {
+        __NOP();
+    }
+
     while ((base->DMA_MODE & ENET_DMA_MODE_SWR_MASK) != 0U)
     {
     }
+
+    /* Restore CSR clock range for MDC clock after reset */
+    base->MAC_MDIO_ADDRESS = (base->MAC_MDIO_ADDRESS & ~ENET_MAC_MDIO_ADDRESS_CR_MASK) | cr;
 
 #if !(defined(FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL) && FSL_SDK_DISABLE_DRIVER_CLOCK_CONTROL)
     /* Disables the clock source. */
@@ -638,7 +698,7 @@ status_t ENET_DescriptorInit(ENET_Type *base, enet_config_t *config, enet_buffer
     assert(config);
     assert(bufferConfig);
 
-    uint8_t ringNum = config->multiqueueCfg == NULL ? 1U : 2U;
+    uint8_t ringNum = config->multiqueueCfg == NULL ? 1U : ENET_RING_NUM_MAX;
     uint8_t channel;
 
     for (channel = 0; channel < ringNum; channel++)
@@ -719,8 +779,9 @@ void ENET_SetISRHandler(ENET_Type *base, enet_isr_t ISRHandler)
 /*!
  * brief Enables the ENET DMA and MAC interrupts.
  *
- * This function enables the ENET interrupt according to the provided mask. The mask
- * is a logical OR of enet_dma_interrupt_enable_t and enet_mac_interrupt_enable_t.
+ * This function enables the ENET interrupts according to the provided mask.
+ * Already enabled interrupts stay enabled even if not listed in the provided mask.
+ * The mask is a logical OR of enet_dma_interrupt_enable_t and enet_mac_interrupt_enable_t.
  * For example, to enable the dma and mac interrupt, do the following.
  * code
  *     ENET_EnableInterrupts(ENET, kENET_DmaRx | kENET_DmaTx | kENET_MacPmt);
@@ -750,7 +811,7 @@ void ENET_EnableInterrupts(ENET_Type *base, uint32_t mask)
             {
                 interrupt |= ENET_DMA_CH_DMA_CHX_INT_EN_NIE_MASK;
             }
-            base->DMA_CH[index].DMA_CHX_INT_EN = interrupt;
+            base->DMA_CH[index].DMA_CHX_INT_EN |= interrupt;
         }
     }
     interrupt = mask >> ENET_MACINT_ENUM_OFFSET;
@@ -811,6 +872,7 @@ void ENET_ClearMacInterruptStatus(ENET_Type *base, uint32_t mask)
 void ENET_DisableInterrupts(ENET_Type *base, uint32_t mask)
 {
     uint32_t interrupt = mask & 0xFFFFU;
+    uint32_t enabledInterrupts;
     uint8_t index;
 
     /* For dma interrupt. */
@@ -818,17 +880,22 @@ void ENET_DisableInterrupts(ENET_Type *base, uint32_t mask)
     {
         for (index = 0; index < ENET_RING_NUM_MAX; index++)
         {
-            /* Set for all abnormal interrupts. */
-            if ((ENET_ABNORM_INT_MASK & interrupt) != 0U)
+            /* Get actually enabled interrupts */
+            enabledInterrupts = base->DMA_CH[index].DMA_CHX_INT_EN;
+            /* Clear the desired interrupt bits */
+            enabledInterrupts &= ~interrupt;
+            /* Clear abnormal interrupt summary bit if none of abnormal interrupts stays enabled. */
+            if ((ENET_ABNORM_INT_MASK & enabledInterrupts) == 0U)
             {
-                interrupt |= ENET_DMA_CH_DMA_CHX_INT_EN_AIE_MASK;
+                enabledInterrupts &= ~ENET_DMA_CH_DMA_CHX_INT_EN_AIE_MASK;
             }
-            /* Set for all normal interrupts. */
-            if ((ENET_NORM_INT_MASK & interrupt) != 0U)
+            /* Clear normal interrupt summary bit if none of normal interrupts stays enabled. */
+            if ((ENET_NORM_INT_MASK & enabledInterrupts) == 0U)
             {
-                interrupt |= ENET_DMA_CH_DMA_CHX_INT_EN_NIE_MASK;
+                enabledInterrupts &= ~ENET_DMA_CH_DMA_CHX_INT_EN_NIE_MASK;
             }
-            base->DMA_CH[index].DMA_CHX_INT_EN &= ~interrupt;
+            /* Set the resulting mask */
+            base->DMA_CH[index].DMA_CHX_INT_EN = enabledInterrupts;
         }
     }
     interrupt = mask >> ENET_MACINT_ENUM_OFFSET;
@@ -880,7 +947,7 @@ void ENET_CreateHandler(ENET_Type *base,
     }
     if (config->multiqueueCfg != NULL)
     {
-        ringNum                = 2;
+        ringNum                = ENET_RING_NUM_MAX;
         handle->multiQueEnable = true;
     }
     for (count = 0; count < ringNum; count++)
@@ -936,7 +1003,7 @@ void ENET_CreateHandler(ENET_Type *base,
     handle->userData = userData;
 
     /* Set up interrupt and its handler. */
-    ENET_SetISRHandler(base, ENET_IRQHandler);
+    ENET_SetISRHandler(base, &ENET_IRQHandler);
 }
 
 /*!
@@ -1128,15 +1195,21 @@ status_t ENET_MDIORead(ENET_Type *base, uint8_t phyAddr, uint8_t regAddr, uint16
  */
 void ENET_EnterPowerDown(ENET_Type *base, uint32_t *wakeFilter)
 {
+    uint32_t mask;
     uint8_t index;
-    uint32_t *reg = wakeFilter;
 
     /* Disable the Tx dma. */
-    base->DMA_CH[0].DMA_CHX_TX_CTRL &= ~ENET_DMA_CH_DMA_CHX_TX_CTRL_ST_MASK;
-    base->DMA_CH[1].DMA_CHX_TX_CTRL &= ~ENET_DMA_CH_DMA_CHX_TX_CTRL_ST_MASK;
+    for (index = 0U; index < ENET_RING_NUM_MAX; index++)
+    {
+        base->DMA_CH[index].DMA_CHX_TX_CTRL &= ~ENET_DMA_CH_DMA_CHX_TX_CTRL_ST_MASK;
+    }
 
     /* Disable the mac Tx/Rx. */
     base->MAC_CONFIGURATION &= ~(ENET_MAC_CONFIGURATION_RE_MASK | ENET_MAC_CONFIGURATION_TE_MASK);
+
+#ifdef ENET_MAC_RWK_PACKET_FILTER_WKUPFRMFTR_MASK
+    uint32_t *reg = wakeFilter;
+
     /* Enable the remote wakeup packet and enable the power down mode. */
     if (wakeFilter != NULL)
     {
@@ -1146,8 +1219,15 @@ void ENET_EnterPowerDown(ENET_Type *base, uint32_t *wakeFilter)
             reg++;
         }
     }
-    base->MAC_PMT_CONTROL_STATUS = ENET_MAC_PMT_CONTROL_STATUS_MGKPKTEN_MASK |
-                                   ENET_MAC_PMT_CONTROL_STATUS_RWKPKTEN_MASK | ENET_MAC_PMT_CONTROL_STATUS_PWRDWN_MASK;
+#else
+    (void)wakeFilter;
+#endif /* ENET_MAC_RWK_PACKET_FILTER_WKUPFRMFTR_MASK */
+
+    mask = ENET_MAC_PMT_CONTROL_STATUS_MGKPKTEN_MASK | ENET_MAC_PMT_CONTROL_STATUS_PWRDWN_MASK;
+#ifdef ENET_MAC_PMT_CONTROL_STATUS_RWKPKTEN_MASK
+    mask |= ENET_MAC_PMT_CONTROL_STATUS_RWKPKTEN_MASK;
+#endif /* ENET_MAC_PMT_CONTROL_STATUS_RWKPKTEN_MASK */
+    base->MAC_PMT_CONTROL_STATUS = mask;
 
     /* Enable the MAC Rx. */
     base->MAC_CONFIGURATION |= ENET_MAC_CONFIGURATION_RE_MASK;
@@ -1161,8 +1241,8 @@ void ENET_EnterPowerDown(ENET_Type *base, uint32_t *wakeFilter)
  */
 status_t ENET_SetVlanCtrl(ENET_Type *base, enet_vlan_ctrl_t *control)
 {
-    uint32_t vl = (((uint32_t)control->rxVlanTag.pcp) << 13U) | (((uint32_t)control->rxVlanTag.dei) << 12U) |
-                  (uint32_t)control->rxVlanTag.vid;
+    uint32_t vl = (((uint32_t)control->rxVlanTag.tci.pcp) << 13U) | (((uint32_t)control->rxVlanTag.tci.dei) << 12U) |
+                  (uint32_t)control->rxVlanTag.tci.vid;
     uint32_t vlanCtrl;
 
     if ((control->innerVlanFilterMatch) && (!control->doubleVlanEnable))
@@ -1199,8 +1279,8 @@ status_t ENET_SetVlanCtrl(ENET_Type *base, enet_vlan_ctrl_t *control)
  */
 status_t ENET_SetTxOuterVlan(ENET_Type *base, enet_vlan_tx_config_t *config, enet_vlan_tx_channel_t channel)
 {
-    uint32_t vlt =
-        (((uint32_t)config->tag.pcp) << 13U) | (((uint32_t)config->tag.dei) << 12U) | (uint32_t)config->tag.vid;
+    uint32_t vlt = (((uint32_t)config->tag.tci.pcp) << 13U) | (((uint32_t)config->tag.tci.dei) << 12U) |
+                   (uint32_t)config->tag.tci.vid;
     uint32_t vlanConfig = ENET_MAC_VLAN_INCL_VLTI(config->txDescVlan) | ENET_MAC_VLAN_INCL_CSVL(config->tag.tpid) |
                           ENET_MAC_VLAN_INCL_VLC(config->ops) | ENET_MAC_VLAN_INCL_VLT(vlt);
 
@@ -1214,6 +1294,7 @@ status_t ENET_SetTxOuterVlan(ENET_Type *base, enet_vlan_tx_config_t *config, ene
         vlanConfig |= ENET_MAC_VLAN_INCL_VLP(1);
     }
 
+#ifdef ENET_MAC_VLAN_INCL_BUSY_MASK
     if (channel != kENET_VlanTagAllChannels)
     {
         while ((base->MAC_VLAN_INCL & ENET_MAC_VLAN_INCL_BUSY_MASK) != 0U)
@@ -1232,6 +1313,7 @@ status_t ENET_SetTxOuterVlan(ENET_Type *base, enet_vlan_tx_config_t *config, ene
         base->MAC_VLAN_INCL &= ~(ENET_MAC_VLAN_INCL_RDWR_MASK | ENET_MAC_VLAN_INCL_CBTI_MASK);
     }
     else
+#endif /* ENET_MAC_VLAN_INCL_BUSY_MASK */
     {
         base->MAC_VLAN_INCL = vlanConfig;
     }
@@ -1247,8 +1329,8 @@ status_t ENET_SetTxOuterVlan(ENET_Type *base, enet_vlan_tx_config_t *config, ene
  */
 status_t ENET_SetTxInnerVlan(ENET_Type *base, enet_vlan_tx_config_t *config)
 {
-    uint32_t vlt =
-        (((uint32_t)config->tag.pcp) << 13U) | (((uint32_t)config->tag.dei) << 12U) | (uint32_t)config->tag.vid;
+    uint32_t vlt = (((uint32_t)config->tag.tci.pcp) << 13U) | (((uint32_t)config->tag.tci.dei) << 12U) |
+                   (uint32_t)config->tag.tci.vid;
     uint32_t vlanConfig = ENET_MAC_INNER_VLAN_INCL_VLTI(config->txDescVlan) |
                           ENET_MAC_INNER_VLAN_INCL_CSVL(config->tag.tpid) | ENET_MAC_INNER_VLAN_INCL_VLC(config->ops) |
                           ENET_MAC_INNER_VLAN_INCL_VLT(vlt);
@@ -1292,10 +1374,10 @@ status_t ENET_SetTxInnerVlan(ENET_Type *base, enet_vlan_tx_config_t *config)
  */
 status_t ENET_GetRxFrameSize(ENET_Type *base, enet_handle_t *handle, uint32_t *length, uint8_t channel)
 {
-    (void)base;
-
     assert(handle);
     assert(length);
+
+    (void)base;
 
     enet_rx_bd_ring_t *rxBdRing = (enet_rx_bd_ring_t *)&handle->rxBdRing[channel];
     enet_rx_bd_struct_t *rxDesc = rxBdRing->rxBdBase + rxBdRing->rxGenIdx;
@@ -1312,6 +1394,14 @@ status_t ENET_GetRxFrameSize(ENET_Type *base, enet_handle_t *handle, uint32_t *l
     {
         do
         {
+            /* IOC is set on every descriptor, so the receive interrupt can run
+             * before the DMA has closed the frame. A descriptor still owned by
+             * the DMA is not an error and must not be dropped. */
+            if ((rxDesc->rdes3 & ENET_RXDESCRIP_WR_OWN_MASK) != 0U)
+            {
+                return kStatus_ENET_RxFrameEmpty;
+            }
+
             /* Application owns the buffer descriptor, get the length. */
             if ((rxDesc->rdes3 & ENET_RXDESCRIP_WR_LD_MASK) != 0U)
             {
@@ -1329,6 +1419,29 @@ status_t ENET_GetRxFrameSize(ENET_Type *base, enet_handle_t *handle, uint32_t *l
 
         return kStatus_ENET_RxFrameError;
     }
+}
+
+/*!
+ * Copy up to the remaining frame bytes. The FCS is included in the DMA
+ * buffers but not in frameLen, and it may start in the previous buffer.
+ */
+static uint32_t ENET_CopyRxData(uint8_t *data, uint32_t offset, uint32_t frameLen, uint32_t srcAddr, uint32_t srcLen)
+{
+    uint32_t copyLen = srcLen;
+
+    if ((data == NULL) || (srcAddr == 0U) || (offset >= frameLen) || (copyLen == 0U))
+    {
+        return offset;
+    }
+
+    if (copyLen > (frameLen - offset))
+    {
+        copyLen = frameLen - offset;
+    }
+
+    (void)memcpy((void *)(uint32_t *)(uint32_t)(data + offset), (void *)(uint32_t *)srcAddr, copyLen);
+
+    return (offset + copyLen);
 }
 
 /*!
@@ -1376,22 +1489,15 @@ status_t ENET_ReadFrame(
     assert(handle);
 
     enet_rx_bd_ring_t *rxBdRing = (enet_rx_bd_ring_t *)&handle->rxBdRing[channel];
-    uint32_t len                = 0;
     uint32_t offset             = 0;
     bool isLastBuff             = false;
     status_t result             = kStatus_Fail;
-    bool suspend                = false;
     enet_rx_bd_struct_t *rxDesc;
+    uint16_t startIndex;
 #ifdef ENET_PTP1588FEATURE_REQUIRED
     uint32_t buffer;
     uint32_t bufferAdd;
 #endif /* ENET_PTP1588FEATURE_REQUIRED */
-
-    /* Suspend and command for Rx. */
-    if ((base->DMA_CH[channel].DMA_CHX_STAT & ENET_DMA_CH_DMA_CHX_STAT_RBU_MASK) != 0U)
-    {
-        suspend = true;
-    }
 
     /* For data-NULL input, only update the buffer descriptor. */
     if (data == NULL)
@@ -1401,10 +1507,17 @@ status_t ENET_ReadFrame(
     }
     else
     {
+        startIndex = rxBdRing->rxGenIdx;
         while (!isLastBuff)
         {
             /* The last buffer descriptor of a frame. */
             rxDesc             = rxBdRing->rxBdBase + rxBdRing->rxGenIdx;
+            if ((rxDesc->rdes3 & ENET_RXDESCRIP_WR_OWN_MASK) != 0U)
+            {
+                /* Frame is not complete yet. Leave this descriptor for the DMA. */
+                break;
+            }
+
             rxBdRing->rxGenIdx = ENET_IncreaseIndex(rxBdRing->rxGenIdx, rxBdRing->rxRingLen);
 
             if ((rxDesc->rdes3 & ENET_RXDESCRIP_WR_LD_MASK) != 0U)
@@ -1413,20 +1526,13 @@ status_t ENET_ReadFrame(
                 isLastBuff = true;
                 if (length == ((rxDesc->rdes3 & ENET_RXDESCRIP_WR_PACKETLEN_MASK) - ENET_FCS_LEN))
                 {
-                    /* Copy the frame to user's buffer. */
-                    len = length - offset;
-                    if (len > rxBdRing->rxBuffSizeAlign)
+                    /* Copy the frame to user's buffer. Stop at frameLen so the
+                     * FCS, which may already have started in the previous buffer,
+                     * is not copied and cannot underflow the remaining length. */
+                    offset = ENET_CopyRxData(data, offset, length, rxDesc->rdes0, rxBdRing->rxBuffSizeAlign);
+                    if (handle->doubleBuffEnable)
                     {
-                        (void)memcpy((void *)(uint32_t *)(uint32_t)(data + offset), (void *)(uint32_t *)rxDesc->rdes0,
-                                     rxBdRing->rxBuffSizeAlign);
-                        offset += rxBdRing->rxBuffSizeAlign;
-                        (void)memcpy((void *)(uint32_t *)(uint32_t)(data + offset), (void *)(uint32_t *)rxDesc->rdes2,
-                                     len - rxBdRing->rxBuffSizeAlign);
-                    }
-                    else
-                    {
-                        (void)memcpy((void *)(uint32_t *)(uint32_t)(data + offset), (void *)(uint32_t *)rxDesc->rdes0,
-                                     len);
+                        offset = ENET_CopyRxData(data, offset, length, rxDesc->rdes2, rxBdRing->rxBuffSizeAlign);
                     }
 
                     result = kStatus_Success;
@@ -1480,37 +1586,33 @@ status_t ENET_ReadFrame(
             }
             else
             {
-                /* Store a frame on several buffer descriptors. */
+                /* Store a frame on several buffer descriptors. Keep walking
+                 * until the last descriptor so every buffer is returned. */
                 isLastBuff = false;
-                /* Length check. */
-                if (offset >= length)
+                offset     = ENET_CopyRxData(data, offset, length, rxDesc->rdes0, rxBdRing->rxBuffSizeAlign);
+                if (handle->doubleBuffEnable)
                 {
-                    /* Updates the receive buffer descriptors. */
-                    ENET_UpdateRxDescriptor(rxDesc, NULL, NULL, handle->rxintEnable, handle->doubleBuffEnable);
-                    break;
-                }
-
-                (void)memcpy((void *)(uint32_t *)(uint32_t)(data + offset), (void *)(uint32_t *)rxDesc->rdes0,
-                             rxBdRing->rxBuffSizeAlign);
-                offset += rxBdRing->rxBuffSizeAlign;
-                if (((rxDesc->rdes2) != 0U) && (handle->doubleBuffEnable))
-                {
-                    (void)memcpy((void *)(uint32_t *)(uint32_t)(data + offset), (void *)(uint32_t *)rxDesc->rdes2,
-                                 rxBdRing->rxBuffSizeAlign);
-                    offset += rxBdRing->rxBuffSizeAlign;
+                    offset = ENET_CopyRxData(data, offset, length, rxDesc->rdes2, rxBdRing->rxBuffSizeAlign);
                 }
 
                 /* Updates the receive buffer descriptors. */
                 ENET_UpdateRxDescriptor(rxDesc, NULL, NULL, handle->rxintEnable, handle->doubleBuffEnable);
+
+                if (rxBdRing->rxGenIdx == startIndex)
+                {
+                    break;
+                }
             }
         }
     }
 
-    /* Set command for Rx when it is suspend. */
-    if (suspend)
+    /* DMA stops after using every descriptor up to the tail pointer. Writing
+     * the tail pointer restarts it, including after a buffer-unavailable halt. */
+    if ((base->DMA_CH[channel].DMA_CHX_STAT & ENET_DMA_CH_DMA_CHX_STAT_RBU_MASK) != 0U)
     {
-        base->DMA_CH[channel].DMA_CHX_RXDESC_TAIL_PTR = base->DMA_CH[channel].DMA_CHX_RXDESC_TAIL_PTR;
+        base->DMA_CH[channel].DMA_CHX_STAT = ENET_DMA_CH_DMA_CHX_STAT_RBU_MASK;
     }
+    base->DMA_CH[channel].DMA_CHX_RXDESC_TAIL_PTR = (uint32_t)(uint8_t *)&rxBdRing->rxBdBase[rxBdRing->rxRingLen];
 
     return result;
 }
@@ -1584,7 +1686,7 @@ status_t ENET_RxBufferAllocAll(ENET_Type *base, enet_handle_t *handle)
     uint8_t channel;
     uint16_t index;
     uint16_t j;
-    uint8_t ringNum = (handle->multiQueEnable) ? 2U : 1U;
+    uint8_t ringNum = (handle->multiQueEnable) ? ENET_RING_NUM_MAX : 1U;
 
     if ((handle->rxBuffAlloc == NULL) || (handle->rxBuffFree == NULL))
     {
@@ -1658,7 +1760,7 @@ status_t ENET_RxBufferAllocAll(ENET_Type *base, enet_handle_t *handle)
  */
 void ENET_RxBufferFreeAll(ENET_Type *base, enet_handle_t *handle)
 {
-    uint8_t ringNum = (handle->multiQueEnable) ? 2U : 1U;
+    uint8_t ringNum = (handle->multiQueEnable) ? ENET_RING_NUM_MAX : 1U;
     uint8_t channel;
     uint32_t buffAddr;
     uint16_t index;
@@ -2504,8 +2606,9 @@ void ENET_IRQHandler(ENET_Type *base, enet_handle_t *handle)
     /* DMA CHANNEL 0. */
     if ((base->DMA_INTERRUPT_STATUS & ENET_DMA_INTERRUPT_STATUS_DC0IS_MASK) != 0U)
     {
-        uint32_t flag = base->DMA_CH[0].DMA_CHX_STAT;
-        if ((flag & ENET_DMA_CH_DMA_CHX_STAT_RI_MASK) != 0U)
+        uint32_t flag = base->DMA_CH[0].DMA_CHX_STAT & base->DMA_CH[0].DMA_CHX_INT_EN;
+        if ((flag & (ENET_DMA_CH_DMA_CHX_STAT_RI_MASK | ENET_DMA_CH_DMA_CHX_STAT_NIS_MASK)) ==
+            (ENET_DMA_CH_DMA_CHX_STAT_RI_MASK | ENET_DMA_CH_DMA_CHX_STAT_NIS_MASK))
         {
             base->DMA_CH[0].DMA_CHX_STAT = ENET_DMA_CH_DMA_CHX_STAT_RI_MASK | ENET_DMA_CH_DMA_CHX_STAT_NIS_MASK;
             if (handle->callback != NULL)
@@ -2513,18 +2616,21 @@ void ENET_IRQHandler(ENET_Type *base, enet_handle_t *handle)
                 handle->callback(base, handle, kENET_RxIntEvent, 0, NULL, handle->userData);
             }
         }
-        if ((flag & ENET_DMA_CH_DMA_CHX_STAT_TI_MASK) != 0U)
+        if ((flag & (ENET_DMA_CH_DMA_CHX_STAT_TI_MASK | ENET_DMA_CH_DMA_CHX_STAT_NIS_MASK)) ==
+            (ENET_DMA_CH_DMA_CHX_STAT_TI_MASK | ENET_DMA_CH_DMA_CHX_STAT_NIS_MASK))
         {
             base->DMA_CH[0].DMA_CHX_STAT = ENET_DMA_CH_DMA_CHX_STAT_TI_MASK | ENET_DMA_CH_DMA_CHX_STAT_NIS_MASK;
             ENET_ReclaimTxDescriptor(base, handle, 0);
         }
     }
 
+#if ENET_RING_NUM_MAX > 1
     /* DMA CHANNEL 1. */
     if ((base->DMA_INTERRUPT_STATUS & ENET_DMA_INTERRUPT_STATUS_DC1IS_MASK) != 0U)
     {
-        uint32_t flag = base->DMA_CH[1].DMA_CHX_STAT;
-        if ((flag & ENET_DMA_CH_DMA_CHX_STAT_RI_MASK) != 0U)
+        uint32_t flag = base->DMA_CH[1].DMA_CHX_STAT & base->DMA_CH[1].DMA_CHX_INT_EN;
+        if ((flag & (ENET_DMA_CH_DMA_CHX_STAT_RI_MASK | ENET_DMA_CH_DMA_CHX_STAT_NIS_MASK)) ==
+            (ENET_DMA_CH_DMA_CHX_STAT_RI_MASK | ENET_DMA_CH_DMA_CHX_STAT_NIS_MASK))
         {
             base->DMA_CH[1].DMA_CHX_STAT = ENET_DMA_CH_DMA_CHX_STAT_RI_MASK | ENET_DMA_CH_DMA_CHX_STAT_NIS_MASK;
             if (handle->callback != NULL)
@@ -2532,18 +2638,20 @@ void ENET_IRQHandler(ENET_Type *base, enet_handle_t *handle)
                 handle->callback(base, handle, kENET_RxIntEvent, 1, NULL, handle->userData);
             }
         }
-        if ((flag & ENET_DMA_CH_DMA_CHX_STAT_TI_MASK) != 0U)
+        if ((flag & (ENET_DMA_CH_DMA_CHX_STAT_TI_MASK | ENET_DMA_CH_DMA_CHX_STAT_NIS_MASK)) ==
+            (ENET_DMA_CH_DMA_CHX_STAT_TI_MASK | ENET_DMA_CH_DMA_CHX_STAT_NIS_MASK))
         {
             base->DMA_CH[1].DMA_CHX_STAT = ENET_DMA_CH_DMA_CHX_STAT_TI_MASK | ENET_DMA_CH_DMA_CHX_STAT_NIS_MASK;
             ENET_ReclaimTxDescriptor(base, handle, 1);
         }
     }
+#endif /* ENET_RING_NUM_MAX > 1 */
 
 #ifdef ENET_PTP1588FEATURE_REQUIRED
     /* MAC TIMESTAMP. */
     if ((base->DMA_INTERRUPT_STATUS & ENET_DMA_INTERRUPT_STATUS_MACIS_MASK) != 0U)
     {
-        if ((base->MAC_INTERRUPT_STATUS & ENET_MAC_INTERRUPT_STATUS_TSIS_MASK) != 0U)
+        if ((base->MAC_INTERRUPT_STATUS & base->MAC_INTERRUPT_ENABLE & ENET_MAC_INTERRUPT_STATUS_TSIS_MASK) != 0U)
         {
             if (handle->callback != NULL)
             {
@@ -2553,6 +2661,15 @@ void ENET_IRQHandler(ENET_Type *base, enet_handle_t *handle)
     }
 #endif /* ENET_PTP1588FEATURE_REQUIRED */
     SDK_ISR_EXIT_BARRIER;
+}
+
+void ENET_DriverIRQHandler(uint32_t instance);
+void ENET_DriverIRQHandler(uint32_t instance)
+{
+    if (instance < ARRAY_SIZE(s_enetBases))
+    {
+        s_enetIsr(s_enetBases[instance], s_ENETHandle[instance]);
+    }
 }
 
 void ETHERNET_DriverIRQHandler(void);
